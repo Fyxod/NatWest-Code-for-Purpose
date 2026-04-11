@@ -1,0 +1,57 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import socketio
+
+from app.middlewares.auth import AuthMiddleware
+from app.middlewares.auth_paths import auth_paths
+from app.routes import (
+    documents,
+    excel_skill,
+    export,
+    extra,
+    health,
+    query,
+    settings,
+    thread,
+    upload,
+    user,
+)
+from app.socket_handler import cancel_all_heartbeats, sio
+
+fastapi_app = FastAPI()
+
+
+@fastapi_app.on_event("shutdown")
+async def shutdown_event():
+    await cancel_all_heartbeats()
+
+
+excluded_routes = [("POST", "/user"), ("POST", "/user/login")]
+fastapi_app.add_middleware(
+    AuthMiddleware, included_paths=auth_paths, excluded_routes=excluded_routes
+)
+
+fastapi_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for now
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# fastapi_app.mount("/static", StaticFiles(directory="app/public"), name="static")
+
+
+fastapi_app.include_router(query.router)
+fastapi_app.include_router(user.router)
+fastapi_app.include_router(upload.router)
+fastapi_app.include_router(health.router)
+fastapi_app.include_router(thread.router)
+fastapi_app.include_router(extra.router)
+fastapi_app.include_router(documents.router)
+fastapi_app.include_router(export.router)
+fastapi_app.include_router(excel_skill.router)
+fastapi_app.include_router(settings.router)
+
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

@@ -1,0 +1,4 @@
+FROM gpt-oss:20b
+
+PARAMETER num_ctx 50000
+PARAMETER num_predict 8000

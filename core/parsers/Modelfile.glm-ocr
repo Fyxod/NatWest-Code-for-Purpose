@@ -1,0 +1,31 @@
+# GLM-OCR Custom Modelfile
+#
+# Reduces the context window to 32K and output to 8K to prevent crashes
+# on GPU setups with other models loaded (e.g. GPT-OSS:20B x2).
+#
+# The base glm-ocr:latest model has a very large default context window
+# that can exceed available VRAM when combined with other loaded models.
+#
+# Usage:
+#   1. Place this file on the server running Ollama
+#   2. Create the custom model:
+#        ollama create glm-ocr-32k -f Modelfile.glm-ocr
+#   3. Verify:
+#        ollama list   (should show glm-ocr-32k)
+#   4. The code references this via GLM_OCR_MODEL in constants.py
+#
+# To remove: ollama rm glm-ocr-32k
+
+FROM glm-ocr:latest
+
+# Prompt template — pass prompt directly (per official GLM-OCR docs)
+TEMPLATE {{ .Prompt }}
+
+# Context window: 32K tokens (reduced from default to prevent VRAM crash)
+PARAMETER num_ctx 32768
+
+# Max output tokens: 8K (sufficient for single-page OCR output)
+PARAMETER num_predict 8192
+
+# Deterministic output for factual OCR extraction
+PARAMETER temperature 0
