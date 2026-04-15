@@ -19,6 +19,9 @@ from core.excel_skill.data_extractor import (
     extract_from_spreadsheet,
     get_document_info,
 )
+from core.llm.client import invoke_llm
+from core.llm.output_schemas.chart_skill_outputs import ChartSkillWebData
+from core.llm.prompts.chart_skill_prompts import chart_web_data_prompt
 from core.services.sqlite_manager import SQLiteManager
 
 
@@ -43,42 +46,94 @@ def _sanitize_chart_type(chart_type: Optional[str]) -> str:
     return "bar"
 
 
-def _should_web_search_for_chart_request(user_request: str) -> bool:
-    """Heuristic: trigger web search only for requests that imply external/current context."""
-    text = (user_request or "").lower()
-    if not text:
-        return False
+def _normalize_web_queries(
+    user_request: str, queries: Optional[List[str]]
+) -> List[str]:
+    """Clean and deduplicate LLM-generated web search queries."""
+    out: List[str] = []
+    seen = set()
 
-    web_intent_keywords = [
-        "latest",
-        "current",
-        "market",
-        "industry",
-        "benchmark",
-        "compare with",
-        "vs global",
-        "public data",
-        "web",
-        "internet",
-        "news",
-        "trend",
-        "forecast",
-    ]
-    return any(keyword in text for keyword in web_intent_keywords)
+    for raw in queries or []:
+        q = (raw or "").strip()
+        if not q:
+            continue
+        key = q.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(q)
+        if len(out) >= 4:
+            break
+
+    # Safe fallback when model asks for web but provides no usable query.
+    if not out:
+        out = [user_request.strip()]
+
+    return out
 
 
-async def _collect_chart_web_context(user_request: str) -> List[dict]:
-    """Fetch optional web context for chart planning when external context is required."""
-    try:
-        result = await search_tavily(
-            query=user_request, max_results=5, depth="advanced"
-        )
-        if not result:
-            return []
-        return [result]
-    except Exception as e:
-        print(f"[ChartSkill] Web search failed (non-blocking): {e}")
-        return []
+async def _collect_chart_web_context(queries: List[str]) -> List[dict]:
+    """Fetch optional web context for chart planning using model-generated queries."""
+    contexts: List[dict] = []
+    for query in queries:
+        try:
+            result = await search_tavily(query=query, max_results=5, depth="advanced")
+            if result:
+                contexts.append(result)
+        except Exception as e:
+            print(f"[ChartSkill] Web search failed for '{query}' (non-blocking): {e}")
+
+    return contexts
+
+
+def _extract_sql_table_names(sql_query: str) -> set[str]:
+    """Extract table names referenced in FROM/JOIN clauses."""
+    pattern = re.compile(r'\b(?:FROM|JOIN)\s+"?([A-Za-z0-9_]+)"?', re.IGNORECASE)
+    return {match.group(1) for match in pattern.finditer(sql_query or "")}
+
+
+def _resolve_allowed_tables(
+    user_id: str,
+    thread_id: str,
+    source_doc_ids: Optional[List[str]],
+) -> Optional[List[str]]:
+    """Resolve allowed SQLite table names for an explicit source document selection."""
+    if source_doc_ids is None:
+        return None
+
+    ordered: List[str] = []
+    seen = set()
+    for doc_id in source_doc_ids:
+        for table_name in SQLiteManager.get_tables_for_document(user_id, thread_id, doc_id):
+            if table_name in seen:
+                continue
+            seen.add(table_name)
+            ordered.append(table_name)
+    return ordered
+
+
+def _filter_schema_to_allowed_tables(
+    schema: Optional[str],
+    allowed_tables: Optional[List[str]],
+) -> Optional[str]:
+    """Filter schema text so planner sees only selected tables."""
+    if not schema:
+        return None
+    if allowed_tables is None:
+        return schema
+    if not allowed_tables:
+        return None
+
+    allowed = set(allowed_tables)
+    blocks = re.split(r'\n\n(?=Table:\s+")', schema.strip())
+    kept: List[str] = []
+
+    for block in blocks:
+        match = re.search(r'Table:\s+"([^"]+)"', block)
+        if match and match.group(1) in allowed:
+            kept.append(block)
+
+    return "\n\n".join(kept) if kept else None
 
 
 def _ensure_sqlite_loaded(user_id: str, thread_id: str) -> None:
@@ -264,16 +319,32 @@ async def _extract_chart_dataframe(
     thread_id: str,
     sql_query: Optional[str],
     source_doc_ids: Optional[List[str]] = None,
+    allowed_tables: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """Fetch chart source data from SQL first, then parsed document tables."""
     if sql_query:
-        df = await extract_from_spreadsheet(
-            user_id=user_id,
-            thread_id=thread_id,
-            sql_query=sql_query,
-        )
-        if not df.empty:
-            return df
+        if allowed_tables is not None:
+            referenced_tables = _extract_sql_table_names(sql_query)
+            if referenced_tables and not referenced_tables.issubset(set(allowed_tables)):
+                print(
+                    "[ChartSkill] Ignoring SQL query outside selected document tables"
+                )
+            else:
+                df = await extract_from_spreadsheet(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    sql_query=sql_query,
+                )
+                if not df.empty:
+                    return df
+        else:
+            df = await extract_from_spreadsheet(
+                user_id=user_id,
+                thread_id=thread_id,
+                sql_query=sql_query,
+            )
+            if not df.empty:
+                return df
 
     doc_tables = extract_from_documents(user_id, thread_id, source_doc_ids)
     if doc_tables:
@@ -282,7 +353,20 @@ async def _extract_chart_dataframe(
         if not df.empty:
             return df
 
-    # Last fallback: if spreadsheet exists, sample from first table.
+    # Last fallback: sample from a known table.
+    if allowed_tables is not None:
+        for table_name in allowed_tables:
+            fallback_q = f'SELECT * FROM "{table_name}"'
+            df = await extract_from_spreadsheet(
+                user_id=user_id,
+                thread_id=thread_id,
+                sql_query=fallback_q,
+            )
+            if not df.empty:
+                return df
+
+        return pd.DataFrame()
+
     schema = SQLiteManager.get_schema(user_id, thread_id)
     if schema:
         match = re.search(r'Table:\s+"([^"]+)"', schema)
@@ -300,6 +384,65 @@ async def _extract_chart_dataframe(
     return pd.DataFrame()
 
 
+async def _extract_chart_dataframe_from_web_context(
+    user_request: str,
+    plan_title: str,
+    plan_description: str,
+    chart_type: str,
+    plan_x_key: Optional[str],
+    plan_y_keys: List[str],
+    web_context: Optional[List[dict]],
+    allow_self_knowledge: bool,
+) -> pd.DataFrame:
+    """Build chart rows from web context (and optionally model self-knowledge)."""
+    if not web_context and not allow_self_knowledge:
+        return pd.DataFrame()
+
+    prompt = chart_web_data_prompt(
+        user_request=user_request,
+        chart_title=plan_title,
+        chart_description=plan_description,
+        chart_type=chart_type,
+        requested_x_key=plan_x_key,
+        requested_y_keys=plan_y_keys,
+        web_search_results=web_context,
+        allow_self_knowledge=allow_self_knowledge,
+    )
+
+    rows_result = await invoke_llm(
+        response_schema=ChartSkillWebData,
+        contents=prompt,
+    )
+    rows_result = ChartSkillWebData.model_validate(rows_result)
+
+    if not rows_result.rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows_result.rows)
+    if df.empty:
+        return pd.DataFrame()
+
+    requested_x = rows_result.x_key or plan_x_key
+    if requested_x and requested_x in df.columns:
+        x_key = requested_x
+    else:
+        x_key = str(df.columns[0])
+
+    requested_y = [
+        col
+        for col in (rows_result.y_keys or plan_y_keys)
+        if col in df.columns and col != x_key
+    ]
+    if not requested_y:
+        requested_y = [str(col) for col in df.columns if str(col) != x_key]
+
+    if not requested_y:
+        return pd.DataFrame()
+
+    keep_cols = [x_key] + requested_y[:5]
+    return df[keep_cols].copy()
+
+
 async def generate_chart(
     user_request: str,
     user_id: str,
@@ -315,37 +458,84 @@ async def generate_chart(
 
     The returned artifact is frontend-ready for Recharts.
     """
-    _ensure_sqlite_loaded(user_id, thread_id)
-    schema = SQLiteManager.get_schema(user_id, thread_id)
-    doc_info = get_document_info(user_id, thread_id, source_doc_ids)
+    explicit_no_local_docs = source_doc_ids is not None and len(source_doc_ids) == 0
+    use_local_sources = not explicit_no_local_docs
+
+    schema: Optional[str] = None
+    doc_info: List[dict] = []
+    allowed_tables: Optional[List[str]] = None
+
+    if use_local_sources:
+        _ensure_sqlite_loaded(user_id, thread_id)
+        allowed_tables = _resolve_allowed_tables(user_id, thread_id, source_doc_ids)
+
+        raw_schema = SQLiteManager.get_schema(user_id, thread_id)
+        schema = _filter_schema_to_allowed_tables(raw_schema, allowed_tables)
+        doc_info = get_document_info(user_id, thread_id, source_doc_ids)
+
     web_context: List[dict] = []
-
-    if allow_web_search and _should_web_search_for_chart_request(user_request):
-        web_context = await _collect_chart_web_context(user_request)
-
     plan = await generate_chart_plan(
         user_request=user_request,
         available_schema=schema,
         available_documents=doc_info if doc_info else None,
         preferred_chart_type=preferred_chart_type,
         prior_sql_query=prior_sql_query,
-        web_search_results=web_context,
+        web_search_results=None,
         allow_self_knowledge=allow_self_knowledge,
         allow_web_search=allow_web_search,
+        web_context_already_fetched=False,
     )
+
+    # Model-driven web search: if planner says context is insufficient, run its queries and re-plan.
+    if allow_web_search and plan.needs_web_search:
+        generated_queries = _normalize_web_queries(
+            user_request, plan.web_search_queries
+        )
+        web_context = await _collect_chart_web_context(generated_queries)
+
+        plan = await generate_chart_plan(
+            user_request=user_request,
+            available_schema=schema,
+            available_documents=doc_info if doc_info else None,
+            preferred_chart_type=preferred_chart_type,
+            prior_sql_query=prior_sql_query,
+            web_search_results=web_context,
+            allow_self_knowledge=allow_self_knowledge,
+            allow_web_search=allow_web_search,
+            web_context_already_fetched=True,
+        )
 
     chart_type = _sanitize_chart_type(preferred_chart_type or plan.chart_type)
 
-    df = await _extract_chart_dataframe(
-        user_id=user_id,
-        thread_id=thread_id,
-        sql_query=plan.sql_query,
-        source_doc_ids=source_doc_ids,
-    )
+    if use_local_sources:
+        df = await _extract_chart_dataframe(
+            user_id=user_id,
+            thread_id=thread_id,
+            sql_query=plan.sql_query,
+            source_doc_ids=source_doc_ids,
+            allowed_tables=allowed_tables,
+        )
+    else:
+        df = await _extract_chart_dataframe_from_web_context(
+            user_request=user_request,
+            plan_title=plan.title,
+            plan_description=plan.description,
+            chart_type=chart_type,
+            plan_x_key=plan.x_key,
+            plan_y_keys=plan.y_keys,
+            web_context=web_context,
+            allow_self_knowledge=allow_self_knowledge,
+        )
 
     if df.empty:
+        if use_local_sources:
+            raise ValueError(
+                "No tabular data found for the selected source documents. "
+                "Select different documents or refine your chart request."
+            )
         raise ValueError(
-            "No tabular data found to build a chart. Upload spreadsheet/tabular data and retry."
+            "Unable to derive reliable chart rows without source documents. "
+            "Select source documents or provide explicit numeric values/range in your request."
         )
 
     df = _coerce_numeric_columns(df)

@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -126,7 +125,7 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
         threadId,
         requestText.trim(),
         chartType === 'auto' ? undefined : chartType,
-        selectedDocIds.length > 0 ? selectedDocIds : undefined,
+        selectedDocIds,
       );
 
       if (response.tracking_id) {
@@ -234,7 +233,7 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[96vw] max-w-4xl h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-sky-600" />
@@ -252,8 +251,8 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 pr-2">
-                <div className="space-y-2">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+                <div className="space-y-2 pb-1">
                   {loadingList && (
                     <div className="flex justify-center py-8">
                       <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -274,7 +273,7 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                   {!loadingList && savedCharts.map((item) => (
                     <Card key={item.tracking_id} className="p-4 hover:bg-accent/20 transition-colors">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 pr-1">
                           <div className="flex items-center gap-2">
                             {item.chart_type === 'line' ? (
                               <LineChart className="w-4 h-4 text-sky-600 flex-none" />
@@ -292,7 +291,7 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                             {item.created_at && <span>{formatDate(item.created_at)}</span>}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-none">
+                        <div className="flex items-center gap-1 flex-none shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -325,12 +324,12 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                     </Card>
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           )}
 
           {view === 'generate' && (
-            <ScrollArea className="flex-1 pr-2">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
               <div className="space-y-4 py-2">
                 <div>
                   <label className="text-sm font-medium mb-1.5 block">Quick Actions</label>
@@ -389,6 +388,9 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                     <label className="text-sm font-medium mb-1.5 block">
                       Source Documents <span className="text-muted-foreground font-normal">(optional)</span>
                     </label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      If none are selected, uploaded files will be ignored for this chart.
+                    </p>
                     <div className="border rounded-md p-2 space-y-1.5 max-h-32 overflow-y-auto">
                       {documents.map((doc) => (
                         <label
@@ -435,7 +437,7 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back to Charts
                 </Button>
               </div>
-            </ScrollArea>
+            </div>
           )}
 
           {view === 'result' && result && (

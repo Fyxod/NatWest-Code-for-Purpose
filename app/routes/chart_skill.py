@@ -71,7 +71,11 @@ async def generate_chart(request: Request, body: ChartGenerateRequest = Body(...
                 user_request=body.request_text,
                 user_id=user_id,
                 thread_id=thread_id,
-                source_doc_ids=body.source_document_ids,
+                source_doc_ids=(
+                    body.source_document_ids
+                    if body.source_document_ids is not None
+                    else []
+                ),
                 preferred_chart_type=body.chart_type,
                 allow_self_knowledge=True,
                 allow_web_search=True,

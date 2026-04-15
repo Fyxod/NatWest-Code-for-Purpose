@@ -81,7 +81,7 @@ def extract_from_documents(
             continue
 
         doc_id = data.get("id", "")
-        if doc_ids and doc_id not in doc_ids:
+        if doc_ids is not None and doc_id not in doc_ids:
             continue
 
         doc_title = data.get("title", filename.replace(".json", ""))
@@ -367,7 +367,7 @@ def get_document_info(
             continue
 
         doc_id = data.get("id", "")
-        if source_doc_ids and doc_id not in source_doc_ids:
+        if source_doc_ids is not None and doc_id not in source_doc_ids:
             continue
 
         doc_type = data.get("type", "unknown")

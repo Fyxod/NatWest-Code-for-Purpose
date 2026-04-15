@@ -45,3 +45,34 @@ class ChartSkillPlan(LLMOutputBase):
         default=300,
         description="Suggested maximum number of rows to visualize for readability.",
     )
+    needs_web_search: bool = Field(
+        default=False,
+        description=(
+            "Set true when you have little/no context to confidently plan the chart "
+            "and require external web context first."
+        ),
+    )
+    web_search_queries: List[str] = Field(
+        default_factory=list,
+        description=(
+            "2-4 focused web search queries to gather missing context. "
+            "Only populate when needs_web_search=true and web context is not yet provided."
+        ),
+    )
+
+
+class ChartSkillWebData(LLMOutputBase):
+    """Structured chart rows generated from web context and/or self-knowledge."""
+
+    x_key: str = Field(description="X-axis/category key present in each row.")
+    y_keys: List[str] = Field(
+        default_factory=list,
+        description="Numeric series keys present in each row.",
+    )
+    rows: List[dict] = Field(
+        default_factory=list,
+        description=(
+            "Array of row objects. Each row must contain x_key and one or more "
+            "numeric y_keys."
+        ),
+    )

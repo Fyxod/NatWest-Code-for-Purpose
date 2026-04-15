@@ -16,6 +16,7 @@ async def generate_chart_plan(
     web_search_results: Optional[List[dict]] = None,
     allow_self_knowledge: bool = True,
     allow_web_search: bool = False,
+    web_context_already_fetched: bool = False,
 ) -> ChartSkillPlan:
     prompt = chart_plan_prompt(
         user_request=user_request,
@@ -26,6 +27,7 @@ async def generate_chart_plan(
         web_search_results=web_search_results,
         allow_self_knowledge=allow_self_knowledge,
         allow_web_search=allow_web_search,
+        web_context_already_fetched=web_context_already_fetched,
     )
 
     plan = await invoke_llm(
