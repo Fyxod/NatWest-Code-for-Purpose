@@ -104,7 +104,9 @@ def _resolve_allowed_tables(
     ordered: List[str] = []
     seen = set()
     for doc_id in source_doc_ids:
-        for table_name in SQLiteManager.get_tables_for_document(user_id, thread_id, doc_id):
+        for table_name in SQLiteManager.get_tables_for_document(
+            user_id, thread_id, doc_id
+        ):
             if table_name in seen:
                 continue
             seen.add(table_name)
@@ -325,7 +327,9 @@ async def _extract_chart_dataframe(
     if sql_query:
         if allowed_tables is not None:
             referenced_tables = _extract_sql_table_names(sql_query)
-            if referenced_tables and not referenced_tables.issubset(set(allowed_tables)):
+            if referenced_tables and not referenced_tables.issubset(
+                set(allowed_tables)
+            ):
                 print(
                     "[ChartSkill] Ignoring SQL query outside selected document tables"
                 )
@@ -583,8 +587,8 @@ async def generate_chart(
     prepared_df.to_csv(csv_path, index=False)
 
     item_url = f"/chart-skill/item/{thread_id}/{chart_id}"
-    download_json_url = f"/chart-skill/download/{thread_id}/{chart_id}.json"
-    download_csv_url = f"/chart-skill/download/{thread_id}/{chart_id}.csv"
+    download_json_url = f"/chart-skill/download/{thread_id}/{json_file_name}"
+    download_csv_url = f"/chart-skill/download/{thread_id}/{csv_file_name}"
 
     return ChartSkillResult(
         chart_id=chart_id,

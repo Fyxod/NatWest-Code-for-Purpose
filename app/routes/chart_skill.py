@@ -190,15 +190,9 @@ async def list_charts(request: Request, thread_id: str):
                 "item_url": data.get(
                     "item_url", f"/chart-skill/item/{thread_id}/{chart_id}"
                 ),
-                "download_json_url": data.get(
-                    "download_json_url",
-                    f"/chart-skill/download/{thread_id}/{chart_id}.json",
-                ),
+                "download_json_url": f"/chart-skill/download/{thread_id}/chart_{chart_id}.json",
                 "download_csv_url": (
-                    data.get(
-                        "download_csv_url",
-                        f"/chart-skill/download/{thread_id}/{chart_id}.csv",
-                    )
+                    f"/chart-skill/download/{thread_id}/chart_{chart_id}.csv"
                     if os.path.exists(csv_path)
                     else None
                 ),
@@ -278,7 +272,18 @@ async def download_chart_artifact(request: Request, thread_id: str, file_name: s
     if ".." in file_name or "/" in file_name or "\\" in file_name:
         raise HTTPException(status_code=400, detail="Invalid file name")
 
-    file_path = f"data/{user_id}/threads/{thread_id}/chart_exports/{file_name}"
+    export_dir = f"data/{user_id}/threads/{thread_id}/chart_exports"
+    file_path = os.path.join(export_dir, file_name)
+
+    # Backward compatibility: older metadata may reference {chart_id}.json/csv
+    # while persisted files are named chart_{chart_id}.json/csv.
+    if not os.path.exists(file_path):
+        root, ext = os.path.splitext(file_name)
+        if ext in {".json", ".csv"} and root and not root.startswith("chart_"):
+            legacy_path = os.path.join(export_dir, f"chart_{root}{ext}")
+            if os.path.exists(legacy_path):
+                file_path = legacy_path
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
