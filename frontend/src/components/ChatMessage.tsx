@@ -1,5 +1,5 @@
 import { Chat } from '@/lib/api';
-import { User, Bot, Trash2, BarChart3 } from 'lucide-react';
+import { User, Bot, Trash2, BarChart3, Volume2, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
@@ -26,8 +26,68 @@ export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
   const [activeChartTitle, setActiveChartTitle] = React.useState<string>('Interactive Chart');
   const [activeJsonUrl, setActiveJsonUrl] = React.useState<string | undefined>(undefined);
   const [activeCsvUrl, setActiveCsvUrl] = React.useState<string | null | undefined>(undefined);
+  const [isSpeaking, setIsSpeaking] = React.useState(false);
+  const utteranceRef = React.useRef<SpeechSynthesisUtterance | null>(null);
 
   const chartsUsed = chat.sources?.charts_used ?? [];
+  const supportsSpeech = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+  const speechText = React.useMemo(() => {
+    // Convert markdown-heavy content into cleaner plain text for TTS.
+    return String(chat.content ?? '')
+      .replace(/```[\s\S]*?```/g, ' code block omitted ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+      .replace(/[*_>#-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, [chat.content]);
+
+  const stopSpeaking = React.useCallback(() => {
+    if (!supportsSpeech) {
+      return;
+    }
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    setIsSpeaking(false);
+  }, [supportsSpeech]);
+
+  const handleToggleSpeak = React.useCallback(() => {
+    if (!supportsSpeech || !speechText) {
+      return;
+    }
+
+    if (isSpeaking) {
+      stopSpeaking();
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+    };
+
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  }, [isSpeaking, speechText, stopSpeaking, supportsSpeech]);
+
+  React.useEffect(() => {
+    return () => {
+      if (utteranceRef.current && supportsSpeech) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [supportsSpeech]);
+
   // Markdown is enabled by default for bot messages. Removed per-message toggle.
   const displayTime = React.useMemo(() => {
     // User-requested simple logic:
@@ -62,10 +122,27 @@ export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
   }, [chat.timestamp]);
 
   return (
-    <div className={cn('flex gap-3 p-4', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('group flex gap-3 p-4', isUser ? 'justify-end' : 'justify-start')}>
       {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Bot className="w-5 h-5 text-primary" />
+        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <Bot className="w-5 h-5 text-primary" />
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            aria-label={isSpeaking ? 'Stop reading message' : 'Read message out loud'}
+            onClick={handleToggleSpeak}
+            disabled={!supportsSpeech || !speechText}
+            className={cn(
+              'h-6 w-6 text-muted-foreground hover:text-primary transition-opacity',
+              'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+              isSpeaking && 'opacity-100 pointer-events-auto text-primary'
+            )}
+          >
+            {isSpeaking ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          </Button>
         </div>
       )}
 
