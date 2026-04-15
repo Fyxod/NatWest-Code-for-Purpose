@@ -58,6 +58,16 @@ const QUICK_ACTIONS = [
     chartType: 'composed',
     prompt: 'Create a multi-metric dashboard chart combining bars and lines for key indicators.',
   },
+  {
+    label: 'Heatmap matrix',
+    chartType: 'heatmap',
+    prompt: 'Create a heatmap matrix showing intensity by category and metric over time.',
+  },
+  {
+    label: '3D relationship',
+    chartType: 'scatter3d',
+    prompt: 'Create a 3D scatter chart to show relationships among three numeric variables.',
+  },
 ];
 
 const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
@@ -365,8 +375,12 @@ const ChartSkillModal: React.FC<Props> = ({ open, onOpenChange, threadId, docume
                       <SelectItem value="area">Area</SelectItem>
                       <SelectItem value="pie">Pie</SelectItem>
                       <SelectItem value="scatter">Scatter</SelectItem>
+                      <SelectItem value="scatter3d">3D Scatter</SelectItem>
+                      <SelectItem value="bubble">Bubble</SelectItem>
                       <SelectItem value="radar">Radar</SelectItem>
                       <SelectItem value="composed">Composed</SelectItem>
+                      <SelectItem value="heatmap">Heatmap</SelectItem>
+                      <SelectItem value="treemap">Treemap</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

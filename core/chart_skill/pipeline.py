@@ -41,9 +41,57 @@ class ChartSkillResult:
 
 def _sanitize_chart_type(chart_type: Optional[str]) -> str:
     value = (chart_type or "bar").strip().lower()
-    if value in {"bar", "line", "area", "pie", "scatter", "radar", "composed"}:
+    aliases = {
+        "3d_scatter": "scatter3d",
+        "3d-scatter": "scatter3d",
+        "3d scatter": "scatter3d",
+        "scatter_3d": "scatter3d",
+        "scatter-3d": "scatter3d",
+        "scatter 3d": "scatter3d",
+        "heat map": "heatmap",
+        "tree map": "treemap",
+        "bubble chart": "bubble",
+    }
+    value = aliases.get(value, value)
+
+    if value in {
+        "bar",
+        "line",
+        "area",
+        "pie",
+        "scatter",
+        "scatter3d",
+        "bubble",
+        "radar",
+        "composed",
+        "heatmap",
+        "treemap",
+    }:
         return value
     return "bar"
+
+
+def _infer_requested_chart_type(user_request: str) -> Optional[str]:
+    """Infer a chart type directly from explicit user language."""
+    text = (user_request or "").strip().lower()
+    if not text:
+        return None
+
+    if (
+        "3d" in text or "3-d" in text or "three dimensional" in text
+    ) and "scatter" in text:
+        return "scatter3d"
+
+    if "heatmap" in text or "heat map" in text:
+        return "heatmap"
+
+    if "treemap" in text or "tree map" in text:
+        return "treemap"
+
+    if "bubble" in text and "chart" in text:
+        return "bubble"
+
+    return None
 
 
 def _normalize_web_queries(
@@ -227,6 +275,7 @@ def _select_axes(
     df: pd.DataFrame,
     requested_x: Optional[str],
     requested_y: List[str],
+    chart_type: str,
 ) -> tuple[str, List[str]]:
     """Choose robust x/y axis columns from requested plan and actual dataframe."""
     columns = [str(c) for c in df.columns]
@@ -237,11 +286,15 @@ def _select_axes(
 
     x_key = _first_valid([requested_x] if requested_x else [], col_set)
     if not x_key:
-        x_key = (
-            non_numeric_cols[0]
-            if non_numeric_cols
-            else (columns[0] if columns else "x")
-        )
+        # Numeric-first defaults for numeric scatter plots.
+        if chart_type in {"scatter", "scatter3d", "bubble"} and numeric_cols:
+            x_key = numeric_cols[0]
+        else:
+            x_key = (
+                non_numeric_cols[0]
+                if non_numeric_cols
+                else (columns[0] if columns else "x")
+            )
 
     requested_valid = [c for c in requested_y if c in col_set and c != x_key]
     requested_numeric = [c for c in requested_valid if c in numeric_cols]
@@ -300,10 +353,70 @@ def _prepare_chart_rows(
             data = data[[x_key, y_keys[0]]]
         data = data.dropna(subset=[x_key] + y_keys)
         data = data.head(max_rows)
+    elif chart_type == "scatter3d":
+        # 3d scatter requires x, y, z numeric columns.
+        if len(y_keys) > 2:
+            y_keys[:] = y_keys[:2]
+            data = data[[x_key, y_keys[0], y_keys[1]]]
+        data = data.dropna(subset=[x_key] + y_keys)
+        data = data.head(max_rows)
+    elif chart_type == "bubble":
+        # bubble can use y + optional size metric from second y key.
+        if len(y_keys) > 2:
+            y_keys[:] = y_keys[:2]
+            data = data[[x_key] + y_keys]
+        data = data.dropna(subset=[x_key] + y_keys)
+        data = data.head(max_rows)
     else:
         data = data.head(max_rows)
 
     return data
+
+
+def _ensure_scatter3d_dimensions(
+    df: pd.DataFrame,
+    x_key: str,
+    y_keys: List[str],
+) -> tuple[pd.DataFrame, str, List[str]]:
+    """Guarantee 3D scatter has x + two y dimensions, synthesizing one if needed."""
+    out = df.copy()
+    numeric_cols = [c for c in out.columns if pd.api.types.is_numeric_dtype(out[c])]
+
+    # Keep x numeric when possible.
+    if x_key not in out.columns or not pd.api.types.is_numeric_dtype(out[x_key]):
+        if numeric_cols:
+            x_key = numeric_cols[0]
+
+    y_candidates = [
+        k
+        for k in y_keys
+        if k in out.columns and k != x_key and pd.api.types.is_numeric_dtype(out[k])
+    ]
+
+    for col in numeric_cols:
+        if col != x_key and col not in y_candidates:
+            y_candidates.append(col)
+        if len(y_candidates) >= 2:
+            break
+
+    if len(y_candidates) < 2:
+        synthetic_col = "row_index"
+        # Avoid collisions with existing columns.
+        if synthetic_col in out.columns:
+            synthetic_col = "row_index_3d"
+        out[synthetic_col] = list(range(1, len(out) + 1))
+        if synthetic_col != x_key and synthetic_col not in y_candidates:
+            y_candidates.append(synthetic_col)
+
+    if len(y_candidates) < 2:
+        fallback_col = "row_band"
+        if fallback_col in out.columns:
+            fallback_col = "row_band_3d"
+        out[fallback_col] = [i % 10 for i in range(len(out))]
+        if fallback_col != x_key and fallback_col not in y_candidates:
+            y_candidates.append(fallback_col)
+
+    return out, x_key, y_candidates[:2]
 
 
 def _rows_to_records(df: pd.DataFrame) -> List[Dict[str, object]]:
@@ -509,7 +622,10 @@ async def generate_chart(
             web_context_already_fetched=True,
         )
 
-    chart_type = _sanitize_chart_type(preferred_chart_type or plan.chart_type)
+    forced_chart_type = _infer_requested_chart_type(user_request)
+    chart_type = _sanitize_chart_type(
+        forced_chart_type or preferred_chart_type or plan.chart_type
+    )
 
     if use_local_sources:
         df = await _extract_chart_dataframe(
@@ -543,11 +659,19 @@ async def generate_chart(
         )
 
     df = _coerce_numeric_columns(df)
-    x_key, y_keys = _select_axes(df, plan.x_key, plan.y_keys)
+    x_key, y_keys = _select_axes(df, plan.x_key, plan.y_keys, chart_type)
 
     if chart_type == "pie" and len(y_keys) > 1:
         y_keys = y_keys[:1]
     if chart_type == "scatter" and len(y_keys) > 1:
+        y_keys = y_keys[:1]
+    if chart_type == "bubble" and len(y_keys) > 2:
+        y_keys = y_keys[:2]
+    if chart_type == "scatter3d":
+        df, x_key, y_keys = _ensure_scatter3d_dimensions(df, x_key, y_keys)
+
+    # Treemap requires a single value metric.
+    if chart_type == "treemap" and len(y_keys) > 1:
         y_keys = y_keys[:1]
 
     prepared_df = _prepare_chart_rows(df, chart_type, x_key, y_keys, plan.limit)

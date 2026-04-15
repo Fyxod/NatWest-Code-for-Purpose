@@ -22,8 +22,12 @@ class ChartSkillPlan(LLMOutputBase):
         "area",
         "pie",
         "scatter",
+        "scatter3d",
+        "bubble",
         "radar",
         "composed",
+        "heatmap",
+        "treemap",
     ] = Field(
         description="The best chart type for the user's request and available data."
     )
