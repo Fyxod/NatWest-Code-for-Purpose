@@ -1,6 +1,7 @@
 from langgraph.graph import END, StateGraph
 
 from agent.graph_nodes import (
+    chart_skill_node,
     excel_skill_node,
     failure,
     generate,
@@ -32,6 +33,7 @@ graph_builder.add_node(GLOBAL_SUMMARIZER, global_summarizer)
 graph_builder.add_node(SELF_KNOWLEDGE, self_knowledge)
 graph_builder.add_node(SQL_QUERY, sql_query_node)
 graph_builder.add_node(EXCEL_CREATE, excel_skill_node)
+graph_builder.add_node(CHART_CREATE, chart_skill_node)
 
 # Set the entry point
 graph_builder.set_entry_point(RETRIEVER)
@@ -51,6 +53,7 @@ graph_builder.add_conditional_edges(
         GLOBAL_SUMMARIZER: GLOBAL_SUMMARIZER,
         SQL_QUERY: SQL_QUERY,
         EXCEL_CREATE: EXCEL_CREATE,
+        CHART_CREATE: CHART_CREATE,
         FAILURE: SELF_KNOWLEDGE,
     },
 )
@@ -83,6 +86,9 @@ graph_builder.add_edge(SQL_QUERY, GENERATE)
 
 # Excel skill terminates — the generated file IS the answer
 graph_builder.add_edge(EXCEL_CREATE, END)
+
+# Chart skill terminates — the generated chart artifact IS the answer
+graph_builder.add_edge(CHART_CREATE, END)
 
 graph_builder.add_edge(SELF_KNOWLEDGE, END)
 

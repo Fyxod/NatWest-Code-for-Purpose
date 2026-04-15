@@ -105,6 +105,27 @@ def detect_answer_style(question: str) -> str:
     return "detailed"
 
 
+def _is_chart_request(question: Optional[str]) -> bool:
+    text = (question or "").lower()
+    if not text:
+        return False
+    chart_keywords = [
+        "chart",
+        "graph",
+        "plot",
+        "visualize",
+        "visualise",
+        "visualization",
+        "visualisation",
+        "dashboard",
+        "bar chart",
+        "line chart",
+        "pie chart",
+        "scatter",
+    ]
+    return any(keyword in text for keyword in chart_keywords)
+
+
 def _build_system_prompt(
     mode: str,
     answer_style: str,
@@ -380,6 +401,7 @@ def main_prompt(
 
     # Detect answer style based on question
     answer_style = detect_answer_style(question)
+    chart_request = _is_chart_request(original_query or question)
 
     if mode not in (INTERNAL, EXTERNAL):
         raise ValueError("Invalid mode. Mode must be either 'INTERNAL' or 'EXTERNAL'.")
@@ -684,6 +706,8 @@ def main_prompt(
                         "into groups with counts and details').\n"
                         "   - Also set `answer` to a brief summary: total counts, key categories/patterns, "
                         "top/bottom items. Do NOT try to list every row in the answer.\n"
+                        "8. **VISUALIZATION RULE**: If the user asks for a chart/graph/plot, choose `chart_create`. "
+                        "Set `chart_request` with a clear chart instruction and include a concise summary in `answer`.\n"
                         "   - If the question only needs aggregates (counts, averages, totals), use `answer` directly "
                         "with the summarized data — no Excel needed.\n"
                     ),
@@ -727,9 +751,16 @@ def main_prompt(
         "When using this for large output, also set `answer` to a short summary of the analysis.\n"
     )
 
+    chart_action_text = (
+        "- **chart_create**: Create a persisted interactive chart artifact from tabular data. "
+        "Use this when the user asks for a chart, graph, plot, or visualization. "
+        "Requires the `chart_request` field with a clear natural-language chart instruction "
+        "(e.g., 'Create a monthly revenue line chart by region').\n"
+    )
+
     # When spreadsheet data is available but no SQL has been run yet,
     # reorder actions to put sql_query first and restrict "answer"
-    sql_not_yet_run = spreadsheet_schema and not sql_result
+    sql_not_yet_run = spreadsheet_schema and not sql_result and not chart_request
     if sql_not_yet_run:
         answer_action_text = (
             "- **answer**: Directly answer the question. "
@@ -747,6 +778,7 @@ def main_prompt(
             "You can perform the following actions:\n"
             + sql_action_text
             + excel_action_text
+            + chart_action_text
             + answer_action_text
         )
     else:
@@ -760,6 +792,7 @@ def main_prompt(
             )
             + sql_action_text
             + excel_action_text
+            + chart_action_text
         )
 
     action_list += (

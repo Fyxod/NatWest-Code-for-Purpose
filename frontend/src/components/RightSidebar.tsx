@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, FileText, Sparkles, Download, Trash2, Plus, FileSpreadsheet, Settings } from 'lucide-react';
+import { Map as MapIcon, FileText, Sparkles, Download, Trash2, Plus, FileSpreadsheet, Settings, BarChart3 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import MindMapModal from './MindMapModal';
 import SummaryModal from './SummaryModal';
 import ExcelSkillModal from './ExcelSkillModal';
+import ChartSkillModal from './ChartSkillModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -47,6 +48,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [docsOpen, setDocsOpen] = React.useState(false);
   const [summaryOpen, setSummaryOpen] = React.useState(false);
   const [excelSkillOpen, setExcelSkillOpen] = React.useState(false);
+  const [chartSkillOpen, setChartSkillOpen] = React.useState(false);
   const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -203,6 +205,14 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Excel Builder</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setChartSkillOpen)} disabled={!threadId} aria-label="Chart Builder">
+                  <BarChart3 className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Chart Builder</TooltipContent>
+            </Tooltip>
             {/* Export Button (Collapsed) */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -246,6 +256,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setExcelSkillOpen)} disabled={!threadId}>
                 <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel Builder
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setChartSkillOpen)} disabled={!threadId}>
+                <BarChart3 className="w-4 h-4 mr-2" /> Chart Builder
               </Button>
               <Button
                 className="w-full justify-start text-muted-foreground hover:text-primary"
@@ -456,6 +469,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       </AlertDialog>
 
       <ExcelSkillModal open={excelSkillOpen} onOpenChange={setExcelSkillOpen} threadId={threadId ?? ''} documents={documents} />
+      <ChartSkillModal open={chartSkillOpen} onOpenChange={setChartSkillOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
   );
 };

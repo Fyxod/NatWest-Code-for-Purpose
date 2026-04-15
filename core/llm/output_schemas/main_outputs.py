@@ -25,8 +25,9 @@ class MainLLMOutputInternal(LLMOutputBase):
         "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
         "excel_create",  # create a downloadable Excel file from the data
+        "chart_create",  # create an interactive chart artifact from the data
     ] = Field(
-        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file."
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file. Use 'chart_create' when the user asks for a chart/graph/plot/visualization."
     )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -44,6 +45,10 @@ class MainLLMOutputInternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'. E.g., 'Create a pivot table of sales by region with a bar chart'.",
     )
+    chart_request: Optional[str] = Field(
+        default=None,
+        description="Natural-language description of the chart to create. Required when action is 'chart_create'. E.g., 'Create a monthly revenue line chart with region as series'.",
+    )
 
     @field_validator("action", mode="before")
     @classmethod
@@ -67,6 +72,16 @@ class MainLLMOutputInternal(LLMOutputBase):
                 "create_excel",
             ]:
                 return "excel_create"
+            if val in [
+                "chart",
+                "graph",
+                "plot",
+                "visualize",
+                "visualization",
+                "create_chart",
+                "draw_chart",
+            ]:
+                return "chart_create"
             return val
         return v
 
@@ -80,8 +95,9 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
         "excel_create",  # create a downloadable Excel file from the data
+        "chart_create",  # create an interactive chart artifact from the data
     ] = Field(
-        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file."
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file. Use 'chart_create' when the user asks for a chart/graph/plot/visualization."
     )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -99,6 +115,10 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
+    chart_request: Optional[str] = Field(
+        default=None,
+        description="Natural-language description of the chart to create. Required when action is 'chart_create'.",
+    )
 
     @field_validator("action", mode="before")
     @classmethod
@@ -122,6 +142,16 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
                 "create_excel",
             ]:
                 return "excel_create"
+            if val in [
+                "chart",
+                "graph",
+                "plot",
+                "visualize",
+                "visualization",
+                "create_chart",
+                "draw_chart",
+            ]:
+                return "chart_create"
             return val
         return v
 
@@ -136,8 +166,9 @@ class MainLLMOutputExternal(LLMOutputBase):
         "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
         "excel_create",  # create a downloadable Excel file from the data
+        "chart_create",  # create an interactive chart artifact from the data
     ] = Field(
-        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file."
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file. Use 'chart_create' when the user asks for a chart/graph/plot/visualization."
     )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -159,6 +190,10 @@ class MainLLMOutputExternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
+    chart_request: Optional[str] = Field(
+        default=None,
+        description="Natural-language description of the chart to create. Required when action is 'chart_create'.",
+    )
 
     @field_validator("action", mode="before")
     @classmethod
@@ -179,6 +214,16 @@ class MainLLMOutputExternal(LLMOutputBase):
                 "create_excel",
             ]:
                 return "excel_create"
+            if val in [
+                "chart",
+                "graph",
+                "plot",
+                "visualize",
+                "visualization",
+                "create_chart",
+                "draw_chart",
+            ]:
+                return "chart_create"
             return val
         return v
 

@@ -48,6 +48,18 @@ export interface Chat {
       url: string;
       favicon: string | null;
     }>;
+    charts_used?: Array<{
+      chart_id: string;
+      title: string;
+      description?: string;
+      chart_type: string;
+      x_key?: string;
+      y_keys?: string[];
+      row_count?: number;
+      item_url: string;
+      download_json_url?: string;
+      download_csv_url?: string;
+    }>;
   };
 }
 
@@ -125,6 +137,18 @@ export interface QueryResponse {
       title: string;
       url: string;
       favicon: string | null;
+    }>;
+    charts_used?: Array<{
+      chart_id: string;
+      title: string;
+      description?: string;
+      chart_type: string;
+      x_key?: string;
+      y_keys?: string[];
+      row_count?: number;
+      item_url: string;
+      download_json_url?: string;
+      download_csv_url?: string;
     }>;
   };
 }
@@ -540,6 +564,54 @@ export interface ExcelSkillListItem {
   total_rows: number;
   created_at: string;
   request_text: string;
+}
+
+// ── Chart Skill types ──
+
+export interface ChartSkillGenerateResponse {
+  status: boolean;
+  message?: string;
+  tracking_id?: string;
+}
+
+export interface ChartSkillStatusResponse {
+  status: boolean;
+  message?: string;
+  failed?: boolean;
+  error?: string;
+  result?: ChartSkillListItem;
+}
+
+export interface ChartSkillListItem {
+  tracking_id: string;
+  chart_id: string;
+  title: string;
+  description: string;
+  chart_type: string;
+  x_key: string;
+  y_keys: string[];
+  row_count: number;
+  item_url: string;
+  download_json_url: string;
+  download_csv_url?: string | null;
+  created_at: string;
+  request_text: string;
+}
+
+export interface ChartSkillItemResponse {
+  status: boolean;
+  chart: {
+    chart_id: string;
+    title: string;
+    description: string;
+    chart_type: string;
+    x_key: string;
+    y_keys: string[];
+    row_count: number;
+    created_at: string;
+    request_text: string;
+    data: Array<Record<string, string | number | null>>;
+  };
 }
 
 // Auth helpers
@@ -1144,6 +1216,83 @@ export const api = {
     if (!response.ok) {
       const data = await response.json();
       throw new Error(data.detail || 'Failed to delete Excel file');
+    }
+  },
+
+  // ── Chart Skill ──
+
+  async chartSkillGenerate(
+    threadId: string,
+    requestText: string,
+    chartType?: string,
+    sourceDocumentIds?: string[],
+  ): Promise<ChartSkillGenerateResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/chart-skill/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        request_text: requestText,
+        chart_type: chartType || null,
+        source_document_ids: sourceDocumentIds || null,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to start chart generation');
+    }
+    return data;
+  },
+
+  async chartSkillStatus(trackingId: string): Promise<ChartSkillStatusResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/chart-skill/status/${trackingId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to check chart status');
+    }
+    return data;
+  },
+
+  async chartSkillList(threadId: string): Promise<{ charts: ChartSkillListItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/chart-skill/list/${threadId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to list charts');
+    }
+    return data;
+  },
+
+  async chartSkillItem(threadId: string, chartId: string): Promise<ChartSkillItemResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/chart-skill/item/${threadId}/${chartId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to fetch chart');
+    }
+    return data;
+  },
+
+  async chartSkillDelete(threadId: string, trackingId: string): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/chart-skill/${threadId}/${trackingId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || data.error || 'Failed to delete chart');
     }
   },
 };

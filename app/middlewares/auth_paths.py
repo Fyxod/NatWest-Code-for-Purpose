@@ -8,5 +8,6 @@ auth_paths = [
     "/summary",
     "/export",
     "/excel-skill",
+    "/chart-skill",
     "/settings",
 ]

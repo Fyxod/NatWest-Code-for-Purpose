@@ -6,6 +6,7 @@ import socketio
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.auth_paths import auth_paths
 from app.routes import (
+    chart_skill,
     documents,
     excel_skill,
     export,
@@ -52,6 +53,7 @@ fastapi_app.include_router(extra.router)
 fastapi_app.include_router(documents.router)
 fastapi_app.include_router(export.router)
 fastapi_app.include_router(excel_skill.router)
+fastapi_app.include_router(chart_skill.router)
 fastapi_app.include_router(settings.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

@@ -36,3 +36,6 @@ from .output_schemas.excel_skill_outputs import (
     SheetColumnSpec,
     SheetSpec,
 )
+
+# Chart skill outputs
+from .output_schemas.chart_skill_outputs import ChartSkillPlan

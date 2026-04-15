@@ -292,10 +292,10 @@ async def generate(state: AgentState) -> AgentState:
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
 
-            # For actions that delegate to a dedicated node (excel_create),
+            # For actions that delegate to dedicated nodes (excel/chart create),
             # don't store the LLM's fabricated answer — the downstream node
             # will set the real answer after actual processing.
-            if result.action == EXCEL_CREATE:
+            if result.action in (EXCEL_CREATE, CHART_CREATE):
                 state.answer = ""
             else:
                 state.answer = result.answer
@@ -306,6 +306,7 @@ async def generate(state: AgentState) -> AgentState:
             state.document_id = result.document_id or None
             state.sql_query = getattr(result, "sql_query", None)
             state.excel_request = getattr(result, "excel_request", None)
+            state.chart_request = getattr(result, "chart_request", None)
             return state
 
         except Exception as e:
@@ -1255,6 +1256,103 @@ async def excel_skill_node(state: AgentState) -> AgentState:
     return state
 
 
+async def chart_skill_node(state: AgentState) -> AgentState:
+    """
+    Executes the Chart Skill: generates a persisted interactive chart artifact
+    that can be opened in chat or from the studio history.
+    """
+    from core.chart_skill.pipeline import generate_chart
+
+    request_text = state.chart_request
+    if not request_text:
+        request_text = state.query or state.original_query or "Create a chart"
+
+    original = state.original_query or state.query or ""
+    if (
+        original
+        and request_text
+        and original.strip().lower() != request_text.strip().lower()
+    ):
+        request_text = f"{original}\n\n(Chart specifics: {request_text})"
+
+    print(f"[chart_skill_node] Generating chart: {request_text}")
+
+    try:
+        result = await generate_chart(
+            user_request=request_text,
+            user_id=state.user_id,
+            thread_id=state.thread_id,
+            prior_sql_query=state.sql_last_executed_query or None,
+            allow_self_knowledge=bool(state.use_self_knowledge),
+            allow_web_search=(state.mode == EXTERNAL),
+        )
+
+        state.chart_result = {
+            "chart_id": result.chart_id,
+            "title": result.title,
+            "description": result.description,
+            "chart_type": result.chart_type,
+            "x_key": result.x_key,
+            "y_keys": result.y_keys,
+            "row_count": result.row_count,
+            "item_url": result.item_url,
+            "download_json_url": result.download_json_url,
+            "download_csv_url": result.download_csv_url,
+        }
+
+        state.answer = (
+            f"I've created an interactive chart: **{result.title}**\n\n"
+            f"- **Type:** {result.chart_type}\n"
+            f"- **Data points:** {result.row_count}\n"
+            f"- **X-axis:** {result.x_key}\n"
+            f"- **Series:** {', '.join(result.y_keys)}\n\n"
+            "Use the chart button in this message to open and interact with it."
+        )
+
+        state.messages.append(
+            AIMessage(content=f"Chart created: {result.title} ({result.chart_id})")
+        )
+
+        # Persist status metadata so chat-generated charts appear in studio history.
+        status_dir = f"data/{state.user_id}/threads/{state.thread_id}/chart_exports"
+        os.makedirs(status_dir, exist_ok=True)
+        tracking_id = str(uuid.uuid4())
+        status_data = {
+            "chart_id": result.chart_id,
+            "title": result.title,
+            "description": result.description,
+            "chart_type": result.chart_type,
+            "x_key": result.x_key,
+            "y_keys": result.y_keys,
+            "row_count": result.row_count,
+            "item_url": result.item_url,
+            "download_json_url": result.download_json_url,
+            "download_csv_url": result.download_csv_url,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "request_text": request_text,
+        }
+        status_path = os.path.join(status_dir, f"status_{tracking_id}.json")
+        with open(status_path, "w", encoding="utf-8") as f:
+            json.dump(status_data, f, ensure_ascii=False, indent=2)
+
+        print(
+            f"[chart_skill_node] Created chart {result.chart_id} "
+            f"({result.chart_type}, {result.row_count} rows)"
+        )
+
+    except Exception as e:
+        error_msg = f"Failed to create chart: {str(e)}"
+        print(f"[chart_skill_node] {error_msg}")
+        state.answer = (
+            "I wasn't able to create the chart. "
+            "Please try again or refine your chart request."
+        )
+        state.chart_result = None
+        state.messages.append(AIMessage(content=error_msg))
+
+    return state
+
+
 def main_router(state: AgentState) -> str:
     if state.action == ANSWER:
         print("Router -> Answering the question")
@@ -1295,6 +1393,10 @@ def main_router(state: AgentState) -> str:
     elif state.action == EXCEL_CREATE:
         print("Router -> Creating Excel file")
         return EXCEL_CREATE
+
+    elif state.action == CHART_CREATE:
+        print("Router -> Creating chart artifact")
+        return CHART_CREATE
 
     elif state.action == DOCUMENT_SUMMARIZER:
         print("Router -> Summarizing document")

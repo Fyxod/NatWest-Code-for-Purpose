@@ -11,6 +11,7 @@ SWITCHES = {
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
     "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
     "EXCEL_SKILL": True,  # Excel creation/download skill — generates .xlsx from chat or sidebar
+    "CHART_SKILL": True,  # Chart creation/download skill — generates interactive chart artifacts
     "DOC_BATCH_REDUCER": True,  # MapReduce batching for multi-doc retrieval when token budget overflows
     "USE_VLM_FOR_ANSWER": False,  # Disabled: query-time page rendering depended on removed formats
     "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
@@ -30,7 +31,7 @@ EASYOCR_WORKERS = (
     1  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
 )
 TESSERACT_WORKERS = (
-    5 # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
+    5  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
 )
 EASYOCR_GPU = (
     False  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
@@ -53,7 +54,7 @@ IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3.5:9b"  # Vision Language Model (retained for image-centric parsing)
 # Provider models used by invoke_llm()
 # Used if SWITCHES["GEMINI"] = True
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3-flash-preview"
 
 # Used if SWITCHES["OPENAI"] = True
 OPENAI_MODEL = "gpt-4o-mini"
@@ -70,6 +71,7 @@ DOCUMENT_SUMMARIZER = "document_summarizer"
 SELF_KNOWLEDGE = "self_knowledge"
 SQL_QUERY = "sql_query"
 EXCEL_CREATE = "excel_create"  # Excel skill: create downloadable .xlsx files
+CHART_CREATE = "chart_create"  # Chart skill: create interactive chart artifacts
 MAX_WEB_SEARCH = 2
 MAX_SQL_RETRIES = 6
 INTERNAL = "Internal"

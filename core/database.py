@@ -106,6 +106,78 @@ user_schema = {
                                                     },
                                                 },
                                             },
+                                            "charts_used": {
+                                                "bsonType": "array",
+                                                "items": {
+                                                    "bsonType": "object",
+                                                    "properties": {
+                                                        "chart_id": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "title": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "description": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "chart_type": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "x_key": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "y_keys": {
+                                                            "bsonType": "array",
+                                                            "items": {
+                                                                "bsonType": [
+                                                                    "string",
+                                                                    "null",
+                                                                ]
+                                                            },
+                                                        },
+                                                        "row_count": {
+                                                            "bsonType": [
+                                                                "int",
+                                                                "long",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "item_url": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "download_json_url": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "download_csv_url": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                    },
+                                                },
+                                            },
                                         },
                                     },
                                 },

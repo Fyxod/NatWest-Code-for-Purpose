@@ -341,6 +341,7 @@ const ThreadView = () => {
       // Support both legacy shape and new `sources` wrapper; default to empty arrays
       const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
       const webUsed = response.sources?.web_used ?? response.web_used ?? [];
+      const chartsUsed = response.sources?.charts_used ?? [];
 
       setChats(prev => {
         const updated = [...prev];
@@ -350,6 +351,7 @@ const ThreadView = () => {
           sources: {
             documents_used: docsUsed,
             web_used: webUsed,
+            charts_used: chartsUsed,
           },
           // Map enhanced metadata from backend
           thought_process: response.thought_process,
@@ -361,6 +363,7 @@ const ThreadView = () => {
       setLastSources({
         docsUsed,
         webUsed,
+        chartsUsed,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
@@ -498,6 +501,7 @@ const ThreadView = () => {
               <div key={index}>
                 <ChatMessage
                   chat={chat}
+                  threadId={threadId}
                   onDelete={isPendingAgentResponse ? undefined : () => handleDeleteChat(index)}
                 />
               </div>

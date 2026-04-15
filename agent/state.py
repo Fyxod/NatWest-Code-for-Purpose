@@ -63,6 +63,12 @@ class AgentState(BaseModel):
     )
     excel_result: Optional[str] = None  # Download URL after Excel generation
 
+    # Chart Skill fields
+    chart_request: Optional[str] = (
+        None  # User's chart creation request extracted by LLM
+    )
+    chart_result: Optional[Dict[str, Any]] = None  # Chart metadata after generation
+
     action: Optional[
         Literal[
             f"{ANSWER}",
@@ -72,10 +78,11 @@ class AgentState(BaseModel):
             f"{FAILURE}",
             f"{SQL_QUERY}",
             f"{EXCEL_CREATE}",
+            f"{CHART_CREATE}",
         ]
     ] = Field(
         default=None,
-        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', 'excel_create', or 'failure'.",
+        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', 'excel_create', 'chart_create', or 'failure'.",
     )
 
     # Used to determine the next step in the state graph

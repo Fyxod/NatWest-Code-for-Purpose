@@ -121,7 +121,7 @@ def _serialize_prompt_messages(messages: list) -> str:
 async def invoke_llm(
     response_schema,
     contents,
-    remove_thinking=False,
+    remove_thinking=True,
 ):
     """
     Unified structured LLM invocation with retries and provider routing:
@@ -287,7 +287,7 @@ CRITICAL OUTPUT RULES:
                                 contents=effective_prompt,
                                 config=config,
                             ),
-                            timeout=80,
+                            timeout=180,
                         )
 
                         # Try to extract the raw text content

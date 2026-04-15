@@ -187,7 +187,7 @@ async def query(request: Request, body: QueryRequest):
 
             qe = time.time() - qs
             print(
-                f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {GPU_QUERY_LLM}"
+                f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds"
             )
 
             return {
@@ -195,6 +195,7 @@ async def query(request: Request, body: QueryRequest):
                 "sub_query": query_data["query"],
                 "sub_answer": state.answer,
                 "excel_result": getattr(state, "excel_result", None),
+                "chart_result": getattr(state, "chart_result", None),
                 "chunks": state.chunks,
                 "chunks_used": state.chunks_used,
                 "web_favicons": subquery_favicons,
@@ -278,6 +279,7 @@ async def query(request: Request, body: QueryRequest):
                 "sub_query": output["sub_query"],
                 "sub_answer": output["sub_answer"],
                 "excel_result": output["excel_result"],
+                "chart_result": output["chart_result"],
             }
             chunks.extend(output["chunks"])
             chunks_used.extend(output["chunks_used"])
@@ -327,6 +329,21 @@ async def query(request: Request, body: QueryRequest):
                 f"- [Download Excel File]({url})" for url in excel_links
             )
             answer += f"\n\n---\n\n**Generated Files:**\n{links_md}"
+
+        chart_payloads = []
+        for r in results:
+            chart_meta = r.get("chart_result") if r else None
+            if chart_meta and isinstance(chart_meta, dict):
+                chart_payloads.append(chart_meta)
+
+        if chart_payloads:
+            titles = [c.get("title", "Untitled Chart") for c in chart_payloads]
+            answer += (
+                "\n\n---\n\n"
+                "**Generated Charts:**\n"
+                + "\n".join(f"- {title}" for title in titles)
+                + "\n\nUse the chart button(s) in this response to open and interact with them."
+            )
     else:
         print("Query not being decomposed")
 
@@ -398,6 +415,9 @@ async def query(request: Request, body: QueryRequest):
         answer = state.answer
         chunks.extend(state.chunks)
         chunks_used.extend(state.chunks_used)
+        chart_payloads = []
+        if getattr(state, "chart_result", None):
+            chart_payloads.append(state.chart_result)
     end_time = time.time()
 
     print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
@@ -442,6 +462,7 @@ async def query(request: Request, body: QueryRequest):
                 "chunks_used": [doc.dict() for doc in chunks_used],
                 "modified_used": modified_used,
                 "use_self_knowledge": use_self_knowledge,
+                "chart_payloads": chart_payloads,
             },
             f,
             ensure_ascii=False,
@@ -456,7 +477,11 @@ async def query(request: Request, body: QueryRequest):
             "type": "agent",
             "content": answer,
             "timestamp": now,
-            "sources": {"documents_used": modified_used, "web_used": all_favicons},
+            "sources": {
+                "documents_used": modified_used,
+                "web_used": all_favicons,
+                "charts_used": chart_payloads,
+            },
         },
     ]
 
@@ -476,6 +501,7 @@ async def query(request: Request, body: QueryRequest):
         "sources": {
             "documents_used": modified_used,
             "web_used": all_favicons,
+            "charts_used": chart_payloads,
         },
         "use_self_knowledge": use_self_knowledge,
     }

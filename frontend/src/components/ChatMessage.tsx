@@ -1,9 +1,10 @@
 import { Chat } from '@/lib/api';
-import { User, Bot, Trash2 } from 'lucide-react';
+import { User, Bot, Trash2, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 import { Button } from '@/components/ui/button';
+import ChartModal from './ChartModal';
 import {
   Accordion,
   AccordionContent,
@@ -16,10 +17,17 @@ import { FileText, ExternalLink } from 'lucide-react';
 interface ChatMessageProps {
   chat: Chat;
   onDelete?: () => void;
+  threadId?: string;
 }
 
-export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
+export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
   const isUser = chat.type === 'user';
+  const [activeChartId, setActiveChartId] = React.useState<string | null>(null);
+  const [activeChartTitle, setActiveChartTitle] = React.useState<string>('Interactive Chart');
+  const [activeJsonUrl, setActiveJsonUrl] = React.useState<string | undefined>(undefined);
+  const [activeCsvUrl, setActiveCsvUrl] = React.useState<string | null | undefined>(undefined);
+
+  const chartsUsed = chat.sources?.charts_used ?? [];
   // Markdown is enabled by default for bot messages. Removed per-message toggle.
   const displayTime = React.useMemo(() => {
     // User-requested simple logic:
@@ -90,17 +98,47 @@ export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
             <SafeMarkdownRenderer content={chat.content} />
           </div>
         )}
+
+        {!isUser && chartsUsed.length > 0 && (
+          <div className="mt-3 border-t pt-3 space-y-2">
+            <p className="text-xs text-muted-foreground">Generated Charts</p>
+            <div className="flex flex-wrap gap-2">
+              {chartsUsed.map((chart) => (
+                <Button
+                  key={chart.chart_id}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setActiveChartId(chart.chart_id);
+                    setActiveChartTitle(chart.title || 'Interactive Chart');
+                    setActiveJsonUrl(chart.download_json_url);
+                    setActiveCsvUrl(chart.download_csv_url);
+                  }}
+                  disabled={!threadId}
+                  className="text-xs"
+                >
+                  <BarChart3 className="w-3.5 h-3.5 mr-1" />
+                  {chart.title || 'Open Chart'}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="text-xs opacity-70 mt-2">{displayTime}</p>
 
         {/* Sources Accordion */}
-        {!isUser && chat.sources && (chat.sources.documents_used?.length > 0 || chat.sources.web_used?.length > 0) && (
+        {!isUser && chat.sources && (
+          (chat.sources.documents_used?.length || 0) > 0 ||
+          (chat.sources.web_used?.length || 0) > 0 ||
+          (chat.sources.charts_used?.length || 0) > 0
+        ) && (
           <div className="mt-3 border-t pt-2">
             <Accordion type="single" collapsible className="w-full">
               <AccordionItem value="sources" className="border-b-0">
                 <AccordionTrigger className="py-1 text-xs text-muted-foreground hover:no-underline hover:text-primary">
                   <span className="flex items-center gap-1">
                     <FileText className="w-3 h-3" />
-                    Sources ({(chat.sources.documents_used?.length || 0) + (chat.sources.web_used?.length || 0)})
+                    Sources ({(chat.sources.documents_used?.length || 0) + (chat.sources.web_used?.length || 0) + (chat.sources.charts_used?.length || 0)})
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -120,6 +158,12 @@ export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
                         </a>
                       </div>
                     ))}
+                    {chat.sources.charts_used?.map((chart, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <BarChart3 className="w-3 h-3" />
+                        <span>{chart.title || 'Generated chart'}</span>
+                      </div>
+                    ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -128,6 +172,25 @@ export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
         )}
 
       </div>
+
+      {!isUser && threadId && (
+        <ChartModal
+          open={!!activeChartId}
+          onOpenChange={(v) => {
+            if (!v) {
+              setActiveChartId(null);
+              setActiveChartTitle('Interactive Chart');
+              setActiveJsonUrl(undefined);
+              setActiveCsvUrl(undefined);
+            }
+          }}
+          threadId={threadId}
+          chartId={activeChartId}
+          fallbackTitle={activeChartTitle}
+          downloadJsonUrl={activeJsonUrl}
+          downloadCsvUrl={activeCsvUrl}
+        />
+      )}
 
       {isUser && (
         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
