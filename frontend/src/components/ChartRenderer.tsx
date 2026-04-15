@@ -53,6 +53,42 @@ interface Scatter3DPoint {
   color: string;
 }
 
+interface TreemapHierarchyNode {
+  name: string;
+  value?: number;
+  children?: TreemapHierarchyNode[];
+  fill?: string;
+  pathLabel?: string;
+}
+
+interface TreemapModel {
+  nodes: TreemapHierarchyNode[];
+  hierarchyKeys: string[];
+  totalValue: number;
+}
+
+interface TreemapContentProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  name?: string;
+  value?: number;
+  payload?: TreemapHierarchyNode;
+}
+
+interface TreemapTooltipPayloadItem {
+  value?: number;
+  name?: string;
+  payload?: TreemapHierarchyNode;
+}
+
+interface TreemapTooltipProps {
+  active?: boolean;
+  payload?: TreemapTooltipPayloadItem[];
+  valueKey: string;
+}
+
 const toNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -325,6 +361,218 @@ const HeatmapRenderer: React.FC<{
   );
 };
 
+const TREEMAP_HUES = [212, 148, 26, 283, 352, 188, 48, 116, 8, 236];
+
+const formatCompactNumber = (value: number) => new Intl.NumberFormat(undefined, { notation: 'compact' }).format(value);
+
+const truncateLabel = (value: string, maxChars: number): string => {
+  const text = String(value || '').trim();
+  if (!text || text.length <= maxChars) {
+    return text;
+  }
+  if (maxChars <= 2) {
+    return text.slice(0, Math.max(0, maxChars));
+  }
+  return `${text.slice(0, maxChars - 1)}…`;
+};
+
+const isLikelyNumericColumn = (rows: ChartRow[], key: string): boolean => {
+  if (!rows.length) {
+    return false;
+  }
+
+  const usable = rows
+    .map((row) => toNumber(row[key]))
+    .filter((value): value is number => value !== null);
+  if (!usable.length) {
+    return false;
+  }
+
+  return usable.length / rows.length >= 0.7;
+};
+
+const buildTreemapHierarchy = (rows: ChartRow[], xKey: string, valueKey: string): TreemapModel => {
+  if (!rows.length) {
+    return { nodes: [], hierarchyKeys: [], totalValue: 0 };
+  }
+
+  const sampleKeys = Object.keys(rows[0]);
+  const categoricalKeys = sampleKeys.filter((key) => key !== valueKey && !isLikelyNumericColumn(rows, key));
+
+  const hierarchyKeys: string[] = [];
+  if (xKey && xKey !== valueKey && sampleKeys.includes(xKey)) {
+    hierarchyKeys.push(xKey);
+  }
+
+  for (const key of categoricalKeys) {
+    if (hierarchyKeys.includes(key)) {
+      continue;
+    }
+    hierarchyKeys.push(key);
+    if (hierarchyKeys.length >= 3) {
+      break;
+    }
+  }
+
+  if (!hierarchyKeys.length) {
+    const fallbackKey = sampleKeys.find((key) => key !== valueKey) || xKey;
+    if (fallbackKey) {
+      hierarchyKeys.push(fallbackKey);
+    }
+  }
+
+  const root: TreemapHierarchyNode = { name: 'root', children: [] };
+  let totalValue = 0;
+
+  const upsertChild = (parent: TreemapHierarchyNode, name: string): TreemapHierarchyNode => {
+    if (!parent.children) {
+      parent.children = [];
+    }
+
+    const existing = parent.children.find((child) => child.name === name);
+    if (existing) {
+      return existing;
+    }
+
+    const created: TreemapHierarchyNode = { name, children: [] };
+    parent.children.push(created);
+    return created;
+  };
+
+  rows.forEach((row) => {
+    const value = toNumber(row[valueKey]);
+    if (value === null || value <= 0) {
+      return;
+    }
+
+    const path = hierarchyKeys.map((key) => {
+      const raw = row[key];
+      const text = String(raw ?? '').trim();
+      return text || 'Unknown';
+    });
+
+    if (!path.length) {
+      return;
+    }
+
+    totalValue += value;
+
+    let current = root;
+    const pathParts: string[] = [];
+    path.forEach((segment, idx) => {
+      pathParts.push(segment);
+      const child = upsertChild(current, segment);
+      child.pathLabel = pathParts.join(' > ');
+
+      if (idx === path.length - 1) {
+        child.value = (child.value || 0) + value;
+      } else {
+        current = child;
+      }
+    });
+  });
+
+  if (!root.children || !root.children.length) {
+    return { nodes: [], hierarchyKeys, totalValue: 0 };
+  }
+
+  const paintNode = (node: TreemapHierarchyNode, hue: number, depth: number) => {
+    const saturation = Math.max(42, 76 - depth * 8);
+    const lightness = Math.min(70, 44 + depth * 9);
+    node.fill = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+
+    node.children?.forEach((child) => paintNode(child, hue, depth + 1));
+  };
+
+  root.children.forEach((child, idx) => {
+    paintNode(child, TREEMAP_HUES[idx % TREEMAP_HUES.length], 0);
+  });
+
+  return {
+    nodes: root.children,
+    hierarchyKeys,
+    totalValue,
+  };
+};
+
+const TreemapCellRenderer: React.FC<TreemapContentProps> = ({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  name,
+  value,
+  payload,
+}) => {
+  if (width < 2 || height < 2) {
+    return null;
+  }
+
+  const fill = payload?.fill || '#93c5fd';
+  const showName = width >= 86 && height >= 32;
+  const showValue = width >= 116 && height >= 52 && typeof value === 'number';
+  const maxChars = Math.max(8, Math.floor((Math.min(width - 12, 300)) / 7));
+  const label = truncateLabel(String(name || ''), maxChars);
+
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#e2e8f0" strokeWidth={1} />
+      {showName && (
+        <text
+          x={x + 8}
+          y={y + 18}
+          fill="#ffffff"
+          stroke="rgba(2, 6, 23, 0.7)"
+          strokeWidth={1.25}
+          paintOrder="stroke"
+          fontSize={12}
+          fontWeight={800}
+          letterSpacing={0.1}
+        >
+          {label}
+        </text>
+      )}
+      {showValue && (
+        <text
+          x={x + 8}
+          y={y + 32}
+          fill="#ffffff"
+          stroke="rgba(2, 6, 23, 0.64)"
+          strokeWidth={1}
+          paintOrder="stroke"
+          fontSize={11}
+          fontWeight={700}
+          letterSpacing={0.1}
+        >
+          {formatCompactNumber(value || 0)}
+        </text>
+      )}
+    </g>
+  );
+};
+
+const TreemapHoverTooltip: React.FC<TreemapTooltipProps> = ({ active, payload, valueKey }) => {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  const point = payload[0];
+  const item = point.payload;
+  const numericValue = typeof point.value === 'number' ? point.value : toNumber(point.value);
+  const pathLabel = item?.pathLabel || point.name || 'Segment';
+
+  return (
+    <div className="rounded-md border bg-background px-3 py-2 shadow text-xs">
+      <div className="font-semibold text-foreground max-w-72 break-words">{pathLabel}</div>
+      {numericValue !== null && numericValue !== undefined && (
+        <div className="text-muted-foreground mt-1">
+          {valueKey}: {numericValue.toLocaleString()}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ChartRenderer: React.FC<ChartRendererProps> = ({
   chartType,
   data,
@@ -336,14 +584,20 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
   const safeType = (chartType || 'bar').toLowerCase();
   const series = yKeys && yKeys.length > 0 ? yKeys : [];
   const typedData = data as ChartRow[];
+  const firstRow = typedData[0] || {};
+  const fallbackSeries = series.length > 0 ? series : Object.keys(firstRow).filter((k) => k !== xKey);
+  const primarySeries = fallbackSeries[0] || '';
+  const scatter3D = buildScatter3DPoints(typedData, xKey, fallbackSeries);
+  const treemapModel = React.useMemo(() => {
+    if (safeType !== 'treemap' || !primarySeries || !typedData.length) {
+      return { nodes: [], hierarchyKeys: [], totalValue: 0 } as TreemapModel;
+    }
+    return buildTreemapHierarchy(typedData, xKey, primarySeries);
+  }, [safeType, typedData, xKey, primarySeries]);
 
-  if (!data || data.length === 0) {
+  if (!typedData.length) {
     return <div className="text-sm text-muted-foreground">No chart data available.</div>;
   }
-
-  const fallbackSeries = series.length > 0 ? series : Object.keys(data[0]).filter((k) => k !== xKey);
-  const primarySeries = fallbackSeries[0];
-  const scatter3D = buildScatter3DPoints(typedData, xKey, fallbackSeries);
 
   if (!primarySeries) {
     return <div className="text-sm text-muted-foreground">Unable to infer chart series from data.</div>;
@@ -376,6 +630,35 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
         </p>
         <div style={{ width: '100%', height }} className="rounded-md border overflow-hidden">
           <Scatter3DScene points={scatter3D.points} height={height} />
+        </div>
+      </div>
+    );
+  }
+
+  if (safeType === 'treemap') {
+    if (!treemapModel.nodes.length || treemapModel.totalValue <= 0) {
+      return <div className="text-sm text-muted-foreground">Treemap needs categorical dimensions with positive numeric values.</div>;
+    }
+
+    return (
+      <div className="w-full">
+        {title && <h3 className="text-base font-semibold mb-2">{title}</h3>}
+        <p className="text-xs text-muted-foreground mb-2">
+          Hierarchy: {treemapModel.hierarchyKeys.join(' > ')} | Total {primarySeries}: {treemapModel.totalValue.toLocaleString()}
+        </p>
+        <div style={{ width: '100%', height }}>
+          <ResponsiveContainer>
+            <Treemap
+              data={treemapModel.nodes}
+              dataKey="value"
+              stroke="#e2e8f0"
+              content={<TreemapCellRenderer />}
+              aspectRatio={4 / 3}
+              isAnimationActive={false}
+            >
+              <Tooltip content={<TreemapHoverTooltip valueKey={primarySeries} />} />
+            </Treemap>
+          </ResponsiveContainer>
         </div>
       </div>
     );
@@ -491,20 +774,6 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
                 )
               )}
             </ComposedChart>
-          ) : safeType === 'treemap' ? (
-            <Treemap
-              data={data
-                .map((row) => ({
-                  ...row,
-                  [primarySeries]: toNumber(row[primarySeries]),
-                }))
-                .filter((row) => isNumericSeries(row[primarySeries]))}
-              dataKey={primarySeries}
-              nameKey={xKey}
-              stroke="#ffffff"
-              fill={COLORS[0]}
-              aspectRatio={4 / 3}
-            />
           ) : (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />

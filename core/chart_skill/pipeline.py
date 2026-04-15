@@ -50,6 +50,8 @@ def _sanitize_chart_type(chart_type: Optional[str]) -> str:
         "scatter 3d": "scatter3d",
         "heat map": "heatmap",
         "tree map": "treemap",
+        "sunburst": "treemap",
+        "sun burst": "treemap",
         "bubble chart": "bubble",
     }
     value = aliases.get(value, value)
@@ -86,6 +88,9 @@ def _infer_requested_chart_type(user_request: str) -> Optional[str]:
         return "heatmap"
 
     if "treemap" in text or "tree map" in text:
+        return "treemap"
+
+    if "sunburst" in text or "sun burst" in text:
         return "treemap"
 
     if "bubble" in text and "chart" in text:
