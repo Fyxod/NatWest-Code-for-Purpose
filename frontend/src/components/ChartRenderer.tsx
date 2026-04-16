@@ -53,6 +53,17 @@ interface Scatter3DPoint {
   color: string;
 }
 
+interface Scatter3DAxesMeta {
+  xAxis: string;
+  yAxis: string;
+  zAxis: string;
+  sizeKey?: string;
+  xRange: [number, number];
+  yRange: [number, number];
+  zRange: [number, number];
+  sizeRange?: [number, number];
+}
+
 interface TreemapHierarchyNode {
   name: string;
   value?: number;
@@ -125,11 +136,30 @@ const normalizeToRange = (value: number, min: number, max: number, outMin: numbe
   return outMin + ((value - min) / (max - min)) * (outMax - outMin);
 };
 
+const denormalizeFromRange = (value: number, min: number, max: number) => {
+  if (max <= min) {
+    return min;
+  }
+  return min + ((value + 1) / 2) * (max - min);
+};
+
+const formatAxisValue = (value: number) => {
+  const absValue = Math.abs(value);
+
+  if (absValue >= 1000) {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  if (absValue >= 1) {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+};
+
 const buildScatter3DPoints = (
   rows: ChartRow[],
   xKey: string,
   seriesKeys: string[],
-): { points: Scatter3DPoint[]; axes: { xAxis: string; yAxis: string; zAxis: string; sizeKey?: string } | null } => {
+): { points: Scatter3DPoint[]; axes: Scatter3DAxesMeta | null } => {
   if (!rows.length) {
     return { points: [], axes: null };
   }
@@ -195,10 +225,22 @@ const buildScatter3DPoints = (
     color: colorFromScale(row.zv, zMin, zMax),
   }));
 
-  return { points, axes: { xAxis, yAxis, zAxis, sizeKey: sizeKey || undefined } };
+  return {
+    points,
+    axes: {
+      xAxis,
+      yAxis,
+      zAxis,
+      sizeKey: sizeKey || undefined,
+      xRange: [xMin, xMax],
+      yRange: [yMin, yMax],
+      zRange: [zMin, zMax],
+      sizeRange: sizeKey ? [sizeMin, sizeMax] : undefined,
+    },
+  };
 };
 
-const Scatter3DScene: React.FC<{ points: Scatter3DPoint[]; height: number }> = ({ points, height }) => {
+const Scatter3DScene: React.FC<{ points: Scatter3DPoint[]; axes: Scatter3DAxesMeta; height: number }> = ({ points, axes, height }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
@@ -224,6 +266,7 @@ const Scatter3DScene: React.FC<{ points: Scatter3DPoint[]; height: number }> = (
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, 0);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
@@ -234,7 +277,132 @@ const Scatter3DScene: React.FC<{ points: Scatter3DPoint[]; height: number }> = (
     const grid = new THREE.GridHelper(2.4, 12, 0xcbd5e1, 0xe2e8f0);
     grid.position.y = -1.05;
     scene.add(grid);
-    scene.add(new THREE.AxesHelper(1.4));
+
+    const lineGeometries: THREE.BufferGeometry[] = [];
+    const lineMaterials: THREE.Material[] = [];
+    const labelTextures: THREE.Texture[] = [];
+    const labelMaterials: THREE.Material[] = [];
+
+    const addLine = (start: THREE.Vector3, end: THREE.Vector3, color: string) => {
+      const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+      const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color) });
+      const line = new THREE.Line(geometry, material);
+      scene.add(line);
+      lineGeometries.push(geometry);
+      lineMaterials.push(material);
+    };
+
+    const createTextSprite = (text: string, color = '#0f172a') => {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) {
+        return null;
+      }
+
+      const fontSize = 46;
+      const font = `600 ${fontSize}px "Segoe UI", sans-serif`;
+      context.font = font;
+      const metrics = context.measureText(text);
+      const textWidth = Math.ceil(metrics.width);
+      const horizontalPadding = 22;
+      const verticalPadding = 14;
+
+      canvas.width = textWidth + horizontalPadding * 2;
+      canvas.height = fontSize + verticalPadding * 2;
+
+      context.font = font;
+      context.textBaseline = 'middle';
+      context.fillStyle = 'rgba(248, 250, 252, 0.95)';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = color;
+      context.fillText(text, horizontalPadding, canvas.height / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+
+      const sprite = new THREE.Sprite(material);
+      const spriteWidth = Math.max(0.22, Math.min(0.56, text.length * 0.048));
+      sprite.scale.set(spriteWidth, 0.09, 1);
+
+      labelTextures.push(texture);
+      labelMaterials.push(material);
+
+      return sprite;
+    };
+
+    const addLabel = (text: string, position: THREE.Vector3, color?: string) => {
+      const sprite = createTextSprite(text, color);
+      if (!sprite) {
+        return;
+      }
+      sprite.position.copy(position);
+      scene.add(sprite);
+    };
+
+    const axisBase = -1.1;
+    const axisTop = 1.1;
+    const tickMarks = [-1, 0, 1];
+
+    addLine(
+      new THREE.Vector3(axisBase, axisBase, axisBase),
+      new THREE.Vector3(axisTop, axisBase, axisBase),
+      '#ef4444'
+    );
+    addLine(
+      new THREE.Vector3(axisBase, axisBase, axisBase),
+      new THREE.Vector3(axisBase, axisTop, axisBase),
+      '#22c55e'
+    );
+    addLine(
+      new THREE.Vector3(axisBase, axisBase, axisBase),
+      new THREE.Vector3(axisBase, axisBase, axisTop),
+      '#3b82f6'
+    );
+
+    tickMarks.forEach((tick) => {
+      addLine(
+        new THREE.Vector3(tick, axisBase, axisBase),
+        new THREE.Vector3(tick, axisBase + 0.05, axisBase),
+        '#64748b'
+      );
+      addLabel(
+        formatAxisValue(denormalizeFromRange(tick, axes.xRange[0], axes.xRange[1])),
+        new THREE.Vector3(tick, axisBase - 0.08, axisBase),
+      );
+
+      addLine(
+        new THREE.Vector3(axisBase, tick, axisBase),
+        new THREE.Vector3(axisBase + 0.05, tick, axisBase),
+        '#64748b'
+      );
+      addLabel(
+        formatAxisValue(denormalizeFromRange(tick, axes.yRange[0], axes.yRange[1])),
+        new THREE.Vector3(axisBase - 0.12, tick, axisBase),
+      );
+
+      addLine(
+        new THREE.Vector3(axisBase, axisBase, tick),
+        new THREE.Vector3(axisBase, axisBase + 0.05, tick),
+        '#64748b'
+      );
+      addLabel(
+        formatAxisValue(denormalizeFromRange(tick, axes.zRange[0], axes.zRange[1])),
+        new THREE.Vector3(axisBase - 0.1, axisBase - 0.1, tick),
+      );
+    });
+
+    addLabel(axes.xAxis, new THREE.Vector3(axisTop + 0.17, axisBase, axisBase), '#991b1b');
+    addLabel(axes.yAxis, new THREE.Vector3(axisBase, axisTop + 0.14, axisBase), '#166534');
+    addLabel(axes.zAxis, new THREE.Vector3(axisBase, axisBase, axisTop + 0.16), '#1d4ed8');
 
     const pointGeometry = new THREE.SphereGeometry(1, 12, 12);
     const pointMeshes: THREE.Mesh[] = [];
@@ -282,12 +450,16 @@ const Scatter3DScene: React.FC<{ points: Scatter3DPoint[]; height: number }> = (
         }
       });
       pointGeometry.dispose();
+      lineGeometries.forEach((geometry) => geometry.dispose());
+      lineMaterials.forEach((material) => material.dispose());
+      labelTextures.forEach((texture) => texture.dispose());
+      labelMaterials.forEach((material) => material.dispose());
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [points, height]);
+  }, [points, axes, height]);
 
   return <div ref={containerRef} style={{ width: '100%', height }} />;
 };
@@ -621,16 +793,37 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
       );
     }
 
+    const axes = scatter3D.axes;
+
     return (
       <div className="w-full">
         {title && <h3 className="text-base font-semibold mb-2">{title}</h3>}
         <p className="text-xs text-muted-foreground mb-2">
-          3D axes: x = {scatter3D.axes.xAxis}, y = {scatter3D.axes.yAxis}, z = {scatter3D.axes.zAxis}
-          {scatter3D.axes.sizeKey ? `, bubble size = ${scatter3D.axes.sizeKey}` : ''}
+          3D axes: x = {axes.xAxis}, y = {axes.yAxis}, z = {axes.zAxis}
+          {axes.sizeKey ? `, bubble size = ${axes.sizeKey}` : ''}
         </p>
-        <div style={{ width: '100%', height }} className="rounded-md border overflow-hidden">
-          <Scatter3DScene points={scatter3D.points} height={height} />
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 mb-2">
+          <div className="rounded-md border bg-muted/25 px-2.5 py-2 text-xs">
+            <span className="font-medium text-foreground">{axes.xAxis}</span>
+            <span className="text-muted-foreground">: {formatAxisValue(axes.xRange[0])} to {formatAxisValue(axes.xRange[1])}</span>
+          </div>
+          <div className="rounded-md border bg-muted/25 px-2.5 py-2 text-xs">
+            <span className="font-medium text-foreground">{axes.yAxis}</span>
+            <span className="text-muted-foreground">: {formatAxisValue(axes.yRange[0])} to {formatAxisValue(axes.yRange[1])}</span>
+          </div>
+          <div className="rounded-md border bg-muted/25 px-2.5 py-2 text-xs">
+            <span className="font-medium text-foreground">{axes.zAxis}</span>
+            <span className="text-muted-foreground">: {formatAxisValue(axes.zRange[0])} to {formatAxisValue(axes.zRange[1])}</span>
+          </div>
         </div>
+
+        <div style={{ width: '100%', height }} className="rounded-md border overflow-hidden">
+          <Scatter3DScene points={scatter3D.points} axes={axes} height={height} />
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">
+          Axis tick labels in the scene show min, midpoint, and max values. Drag to rotate and inspect.
+        </p>
       </div>
     );
   }
