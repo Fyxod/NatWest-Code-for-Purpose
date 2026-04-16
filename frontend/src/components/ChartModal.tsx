@@ -62,14 +62,14 @@ const ChartModal: React.FC<ChartModalProps> = ({
     window.open(full, '_blank');
   };
 
+  const chartDescription = (chart?.description || '').trim();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{chart?.title || fallbackTitle || 'Interactive Chart'}</DialogTitle>
-          <DialogDescription>
-            {chart?.description || 'Explore and download this chart artifact.'}
-          </DialogDescription>
+          <DialogDescription>Explore and download this chart artifact.</DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto pr-2">
@@ -84,14 +84,27 @@ const ChartModal: React.FC<ChartModalProps> = ({
           )}
 
           {!loading && !error && chart && (
-            <ChartRenderer
-              chartType={chart.chart_type}
-              data={chart.data}
-              xKey={chart.x_key}
-              yKeys={chart.y_keys}
-              title={chart.title}
-              height={430}
-            />
+            <>
+              <ChartRenderer
+                chartType={chart.chart_type}
+                data={chart.data}
+                xKey={chart.x_key}
+                yKeys={chart.y_keys}
+                title={chart.title}
+                height={430}
+              />
+
+              {chartDescription && (
+                <div className="mt-4 rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+                    Chart Analysis
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground whitespace-pre-line">
+                    {chartDescription}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
 

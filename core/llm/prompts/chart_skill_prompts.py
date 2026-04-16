@@ -176,3 +176,48 @@ def chart_web_data_prompt(
         {"role": "system", "parts": system_prompt},
         {"role": "user", "parts": "\n\n".join(user_parts)},
     ]
+
+
+def chart_description_prompt(
+    user_request: str,
+    chart_title: str,
+    chart_type: str,
+    x_key: str,
+    y_keys: List[str],
+    row_count: int,
+    rows_preview: List[dict],
+    series_summary: Optional[dict] = None,
+):
+    """Build prompt for generating a data-grounded chart narrative."""
+    system_prompt = (
+        "You are a data analyst writing chart narratives for end users.\n"
+        "Return ONLY valid JSON matching the schema exactly.\n\n"
+        "Rules:\n"
+        "1. Write 3-5 sentences in plain business language.\n"
+        "2. Base the narrative strictly on provided data preview and summary stats.\n"
+        "3. Describe at least one trend or pattern (rise/fall/variation/concentration).\n"
+        "4. Mention key magnitudes or comparisons when available.\n"
+        "5. If confidence is limited due to sparse data, state that clearly and avoid speculation.\n"
+        "6. Do not mention SQL, prompts, JSON, or internal system details.\n"
+        "7. Do not invent fields, categories, or values not present in provided context.\n"
+    )
+
+    rows_json = json.dumps(rows_preview or [], ensure_ascii=False, indent=2)
+    summary_json = json.dumps(series_summary or {}, ensure_ascii=False, indent=2)
+
+    user_parts = [
+        f"Original user request: {user_request}",
+        f"Chart title: {chart_title}",
+        f"Chart type: {chart_type}",
+        f"X key: {x_key}",
+        f"Y keys: {', '.join(y_keys) if y_keys else '(none)'}",
+        f"Row count: {row_count}",
+        f"Rows preview:\n```json\n{rows_json}\n```",
+        f"Series summary (derived stats):\n```json\n{summary_json}\n```",
+        "Return ONLY valid JSON. No markdown, no comments, no trailing commas.",
+    ]
+
+    return [
+        {"role": "system", "parts": system_prompt},
+        {"role": "user", "parts": "\n\n".join(user_parts)},
+    ]

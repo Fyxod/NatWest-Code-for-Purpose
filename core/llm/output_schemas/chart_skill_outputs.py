@@ -80,3 +80,14 @@ class ChartSkillWebData(LLMOutputBase):
             "numeric y_keys."
         ),
     )
+
+
+class ChartSkillNarrative(LLMOutputBase):
+    """LLM-generated narrative summary for a prepared chart dataset."""
+
+    description: str = Field(
+        description=(
+            "A concise but insightful chart description that explains key values, "
+            "patterns, and trends visible in the data."
+        )
+    )

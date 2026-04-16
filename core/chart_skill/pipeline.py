@@ -20,8 +20,14 @@ from core.excel_skill.data_extractor import (
     get_document_info,
 )
 from core.llm.client import invoke_llm
-from core.llm.output_schemas.chart_skill_outputs import ChartSkillWebData
-from core.llm.prompts.chart_skill_prompts import chart_web_data_prompt
+from core.llm.output_schemas.chart_skill_outputs import (
+    ChartSkillNarrative,
+    ChartSkillWebData,
+)
+from core.llm.prompts.chart_skill_prompts import (
+    chart_description_prompt,
+    chart_web_data_prompt,
+)
 from core.services.sqlite_manager import SQLiteManager
 
 
@@ -434,6 +440,197 @@ def _rows_to_records(df: pd.DataFrame) -> List[Dict[str, object]]:
     return records
 
 
+def _to_float(value: object) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _round_numeric(value: Optional[float], decimals: int = 4) -> Optional[float]:
+    if value is None:
+        return None
+    return round(float(value), decimals)
+
+
+def _format_numeric(value: Optional[float]) -> str:
+    if value is None:
+        return "n/a"
+
+    abs_value = abs(value)
+    if abs_value >= 1000:
+        text = f"{value:,.2f}"
+    elif abs_value >= 1:
+        text = f"{value:.2f}"
+    else:
+        text = f"{value:.4f}"
+
+    return text.rstrip("0").rstrip(".")
+
+
+def _build_series_summary(
+    prepared_df: pd.DataFrame,
+    x_key: str,
+    y_keys: List[str],
+) -> Dict[str, Dict[str, object]]:
+    """Compute lightweight per-series stats to ground narrative generation."""
+    summary: Dict[str, Dict[str, object]] = {}
+
+    for y_key in y_keys:
+        if y_key not in prepared_df.columns:
+            continue
+
+        series = pd.to_numeric(prepared_df[y_key], errors="coerce").dropna()
+        if series.empty:
+            continue
+
+        start_value = _to_float(series.iloc[0])
+        end_value = _to_float(series.iloc[-1])
+        change_abs = (
+            (end_value - start_value)
+            if start_value is not None and end_value is not None
+            else None
+        )
+        change_pct = None
+        if change_abs is not None and start_value not in (None, 0):
+            change_pct = (change_abs / abs(start_value)) * 100
+
+        trend = "stable"
+        if change_abs is not None:
+            if change_abs > 0:
+                trend = "increasing"
+            elif change_abs < 0:
+                trend = "decreasing"
+
+        peak_index = series.idxmax()
+        trough_index = series.idxmin()
+
+        peak_at = None
+        trough_at = None
+        if x_key in prepared_df.columns and peak_index in prepared_df.index:
+            peak_at = _serialize_value(prepared_df.loc[peak_index, x_key])
+        if x_key in prepared_df.columns and trough_index in prepared_df.index:
+            trough_at = _serialize_value(prepared_df.loc[trough_index, x_key])
+
+        summary[y_key] = {
+            "min": _round_numeric(_to_float(series.min())),
+            "max": _round_numeric(_to_float(series.max())),
+            "mean": _round_numeric(_to_float(series.mean())),
+            "start": _round_numeric(start_value),
+            "end": _round_numeric(end_value),
+            "change_abs": _round_numeric(change_abs),
+            "change_pct": _round_numeric(change_pct),
+            "trend": trend,
+            "peak": _round_numeric(_to_float(series.max())),
+            "peak_at": peak_at,
+            "trough": _round_numeric(_to_float(series.min())),
+            "trough_at": trough_at,
+        }
+
+    return summary
+
+
+def _build_fallback_chart_description(
+    title: str,
+    base_description: str,
+    chart_type: str,
+    x_key: str,
+    y_keys: List[str],
+    row_count: int,
+    series_summary: Dict[str, Dict[str, object]],
+) -> str:
+    """Safe fallback when narrative LLM output is unavailable."""
+    intro = (base_description or "").strip()
+    if not intro:
+        metrics = ", ".join(y_keys) if y_keys else "the selected metric"
+        intro = (
+            f"{title} presents {metrics} by {x_key} using a {chart_type} chart "
+            f"with {row_count} data points."
+        )
+
+    parts = [intro]
+
+    if series_summary:
+        metric = next(iter(series_summary.keys()))
+        stats = series_summary.get(metric, {})
+        trend = str(stats.get("trend") or "stable")
+        start_value = _to_float(stats.get("start"))
+        end_value = _to_float(stats.get("end"))
+        peak_value = _to_float(stats.get("peak"))
+        peak_at = stats.get("peak_at")
+
+        if start_value is not None and end_value is not None:
+            parts.append(
+                f"For {metric}, the overall pattern is {trend}, moving from "
+                f"{_format_numeric(start_value)} to {_format_numeric(end_value)}."
+            )
+
+        if peak_value is not None:
+            if peak_at is not None:
+                parts.append(
+                    f"The highest observed {metric} value is "
+                    f"{_format_numeric(peak_value)} at {peak_at}."
+                )
+            else:
+                parts.append(
+                    f"The highest observed {metric} value is "
+                    f"{_format_numeric(peak_value)}."
+                )
+
+    return " ".join(part for part in parts if part).strip()
+
+
+async def _generate_chart_description(
+    user_request: str,
+    chart_title: str,
+    base_description: str,
+    chart_type: str,
+    x_key: str,
+    y_keys: List[str],
+    prepared_df: pd.DataFrame,
+) -> str:
+    """Generate a trend-focused chart narrative from finalized chart rows."""
+    preview_rows = _rows_to_records(prepared_df.head(24))
+    series_summary = _build_series_summary(prepared_df, x_key, y_keys)
+
+    fallback = _build_fallback_chart_description(
+        title=chart_title,
+        base_description=base_description,
+        chart_type=chart_type,
+        x_key=x_key,
+        y_keys=y_keys,
+        row_count=len(prepared_df),
+        series_summary=series_summary,
+    )
+
+    prompt = chart_description_prompt(
+        user_request=user_request,
+        chart_title=chart_title,
+        chart_type=chart_type,
+        x_key=x_key,
+        y_keys=y_keys,
+        row_count=len(prepared_df),
+        rows_preview=preview_rows,
+        series_summary=series_summary,
+    )
+
+    try:
+        result = await invoke_llm(
+            response_schema=ChartSkillNarrative,
+            contents=prompt,
+        )
+        result = ChartSkillNarrative.model_validate(result)
+        description = (result.description or "").strip()
+        if description:
+            return description
+    except Exception as e:
+        print(f"[ChartSkill] Narrative generation failed, using fallback: {e}")
+
+    return fallback
+
+
 async def _extract_chart_dataframe(
     user_id: str,
     thread_id: str,
@@ -685,6 +882,16 @@ async def generate_chart(
             "Unable to prepare non-empty chart data from the selected columns."
         )
 
+    chart_description = await _generate_chart_description(
+        user_request=user_request,
+        chart_title=plan.title,
+        base_description=plan.description,
+        chart_type=chart_type,
+        x_key=x_key,
+        y_keys=y_keys,
+        prepared_df=prepared_df,
+    )
+
     chart_rows = _rows_to_records(prepared_df)
 
     chart_id = str(uuid.uuid4())
@@ -699,7 +906,7 @@ async def generate_chart(
     artifact = {
         "chart_id": chart_id,
         "title": plan.title,
-        "description": plan.description,
+        "description": chart_description,
         "chart_type": chart_type,
         "x_key": x_key,
         "y_keys": y_keys,
@@ -722,7 +929,7 @@ async def generate_chart(
     return ChartSkillResult(
         chart_id=chart_id,
         title=plan.title,
-        description=plan.description,
+        description=chart_description,
         chart_type=chart_type,
         x_key=x_key,
         y_keys=y_keys,

@@ -34,8 +34,10 @@ async def execute_sql_query(
         output_parts.append(f"**Query executed successfully.**")
         output_parts.append(f"Rows returned: {result['row_count']}")
         if result.get("truncated"):
-            shown = max_rows if max_rows else result['row_count']
-            output_parts.append(f"(Showing first {shown} of {result['row_count']} rows)")
+            shown = max_rows if max_rows else result["row_count"]
+            output_parts.append(
+                f"(Showing first {shown} of {result['row_count']} rows)"
+            )
         output_parts.append("")
         output_parts.append(result["data"])
         return "\n".join(output_parts)
