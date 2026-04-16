@@ -420,6 +420,103 @@ class SQLiteManager:
             }
 
     @classmethod
+    def _strip_identifier_quotes(cls, identifier: str) -> str:
+        """Strip SQL identifier quoting from an identifier token."""
+        token = identifier.strip()
+        if len(token) >= 2:
+            if (token[0] == '"' and token[-1] == '"') or (
+                token[0] == "`" and token[-1] == "`"
+            ):
+                token = token[1:-1]
+            elif token[0] == "[" and token[-1] == "]":
+                token = token[1:-1]
+        return token.strip()
+
+    @classmethod
+    def _extract_tables_from_query(cls, query: str) -> List[str]:
+        """Extract physical table names referenced in FROM/JOIN clauses."""
+        if not query:
+            return []
+
+        pattern = re.compile(
+            r"\b(?:FROM|JOIN)\s+"
+            r"((?:\"[^\"]+\"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)"
+            r"(?:\.(?:\"[^\"]+\"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*))?)",
+            re.IGNORECASE,
+        )
+
+        found: List[str] = []
+        for match in pattern.finditer(query):
+            raw_identifier = match.group(1).strip()
+            # Keep only the table portion if schema-qualified (schema.table)
+            table_part = raw_identifier.split(".")[-1]
+            table_name = cls._strip_identifier_quotes(table_part)
+            if table_name:
+                found.append(table_name)
+
+        unique_tables: List[str] = []
+        seen = set()
+        for table in found:
+            lower_table = table.lower()
+            if lower_table not in seen:
+                seen.add(lower_table)
+                unique_tables.append(table)
+
+        return unique_tables
+
+    @classmethod
+    def get_query_source_details(
+        cls, user_id: str, thread_id: str, query: str
+    ) -> Dict[str, List]:
+        """
+        Return SQL source metadata for a query.
+
+        Shape:
+        {
+          "tables": ["table_a", "table_b"],
+          "documents": [{"doc_id": "...", "tables": ["table_a"]}]
+        }
+        """
+        key = (user_id, thread_id)
+        if key not in cls._connections:
+            return {"tables": [], "documents": []}
+
+        conn = cls._connections[key]
+        extracted_tables = cls._extract_tables_from_query(query)
+
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name != '__doc_table_registry';"
+            )
+            existing_tables = [row[0] for row in cursor.fetchall()]
+        except Exception:
+            existing_tables = []
+
+        existing_by_lower = {table.lower(): table for table in existing_tables}
+
+        resolved_tables: List[str] = []
+        for table in extracted_tables:
+            canonical = existing_by_lower.get(table.lower())
+            if canonical and canonical not in resolved_tables:
+                resolved_tables.append(canonical)
+
+        registry = cls._table_registry.get(key, {})
+        docs: List[Dict[str, List[str]]] = []
+        for doc_id, tables in registry.items():
+            table_map = {t.lower(): t for t in tables}
+            matched = []
+            for resolved in resolved_tables:
+                table_name = table_map.get(resolved.lower())
+                if table_name:
+                    matched.append(table_name)
+            if matched:
+                docs.append({"doc_id": doc_id, "tables": matched})
+
+        return {"tables": resolved_tables, "documents": docs}
+
+    @classmethod
     def has_spreadsheet_data(cls, user_id: str, thread_id: str) -> bool:
         """Check if there's any spreadsheet data loaded for this user/thread.
 

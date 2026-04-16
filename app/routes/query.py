@@ -55,6 +55,45 @@ async def query(request: Request, body: QueryRequest):
     if not thread:
         return {"error": "Thread not found"}
 
+    thread_documents = thread.get("documents", [])
+    documents_by_id = {
+        doc.get("docId"): doc for doc in thread_documents if doc.get("docId")
+    }
+
+    def build_sql_source_entries(agent_state: AgentState) -> list[dict]:
+        """Build SQL source metadata for API/UI from a final agent state."""
+        executed_query = getattr(agent_state, "sql_executed_query", None)
+        if not executed_query:
+            return []
+
+        sql_documents = []
+        for raw_doc in getattr(agent_state, "sql_source_documents", []) or []:
+            doc_id = raw_doc.get("doc_id")
+            doc_meta = documents_by_id.get(doc_id, {})
+            sql_documents.append(
+                {
+                    "doc_id": doc_id,
+                    "title": doc_meta.get("title")
+                    or doc_meta.get("file_name")
+                    or "Spreadsheet Source",
+                    "file_name": doc_meta.get("file_name"),
+                    "tables": raw_doc.get("tables", []) or [],
+                }
+            )
+
+        return [
+            {
+                "query": executed_query,
+                "status": (
+                    "success"
+                    if bool(getattr(agent_state, "sql_last_executed_query", None))
+                    else "failed"
+                ),
+                "tables": getattr(agent_state, "sql_source_tables", []) or [],
+                "documents": sql_documents,
+            }
+        ]
+
     # Collect selected thread instructions
     thread_instructions = [
         ins["text"]
@@ -112,7 +151,7 @@ async def query(request: Request, body: QueryRequest):
 
     # Determine if the thread contains ONLY spreadsheet documents.
     # When True, the retriever will skip RAG to avoid wasted latency and LLM confusion
-    thread_docs = thread.get("documents", [])
+    thread_docs = thread_documents
     spreadsheet_extensions = {".xlsx", ".xls", ".csv"}
     spreadsheet_only = (
         has_spreadsheet
@@ -143,6 +182,7 @@ async def query(request: Request, body: QueryRequest):
     print(f"Rewrite query time: {de:.2f} seconds")
     decomposed = decomposition_result.requires_decomposition
     all_favicons = []
+    sql_used = []
     start_time = time.time()
     if decomposed:
         print("Query to be decomposed")
@@ -196,6 +236,7 @@ async def query(request: Request, body: QueryRequest):
                 "sub_answer": state.answer,
                 "excel_result": getattr(state, "excel_result", None),
                 "chart_result": getattr(state, "chart_result", None),
+                "sql_used": build_sql_source_entries(state),
                 "chunks": state.chunks,
                 "chunks_used": state.chunks_used,
                 "web_favicons": subquery_favicons,
@@ -281,6 +322,7 @@ async def query(request: Request, body: QueryRequest):
                 "excel_result": output["excel_result"],
                 "chart_result": output["chart_result"],
             }
+            sql_used.extend(output.get("sql_used", []))
             chunks.extend(output["chunks"])
             chunks_used.extend(output["chunks_used"])
             all_favicons.extend(output["web_favicons"])
@@ -413,6 +455,7 @@ async def query(request: Request, body: QueryRequest):
                 all_favicons.extend(favicons)
 
         answer = state.answer
+        sql_used = build_sql_source_entries(state)
         chunks.extend(state.chunks)
         chunks_used.extend(state.chunks_used)
         chart_payloads = []
@@ -463,6 +506,7 @@ async def query(request: Request, body: QueryRequest):
                 "modified_used": modified_used,
                 "use_self_knowledge": use_self_knowledge,
                 "chart_payloads": chart_payloads,
+                "sql_used": sql_used,
             },
             f,
             ensure_ascii=False,
@@ -481,6 +525,7 @@ async def query(request: Request, body: QueryRequest):
                 "documents_used": modified_used,
                 "web_used": all_favicons,
                 "charts_used": chart_payloads,
+                "sql_used": sql_used,
             },
         },
     ]
@@ -502,6 +547,7 @@ async def query(request: Request, body: QueryRequest):
             "documents_used": modified_used,
             "web_used": all_favicons,
             "charts_used": chart_payloads,
+            "sql_used": sql_used,
         },
         "use_self_knowledge": use_self_knowledge,
     }

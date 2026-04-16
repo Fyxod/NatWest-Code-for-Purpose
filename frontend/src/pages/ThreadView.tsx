@@ -342,6 +342,7 @@ const ThreadView = () => {
       const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
       const webUsed = response.sources?.web_used ?? response.web_used ?? [];
       const chartsUsed = response.sources?.charts_used ?? [];
+      const sqlUsed = response.sources?.sql_used ?? [];
 
       setChats(prev => {
         const updated = [...prev];
@@ -352,6 +353,7 @@ const ThreadView = () => {
             documents_used: docsUsed,
             web_used: webUsed,
             charts_used: chartsUsed,
+            sql_used: sqlUsed,
           },
           // Map enhanced metadata from backend
           thought_process: response.thought_process,
@@ -364,6 +366,7 @@ const ThreadView = () => {
         docsUsed,
         webUsed,
         chartsUsed,
+        sqlUsed,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to get response';

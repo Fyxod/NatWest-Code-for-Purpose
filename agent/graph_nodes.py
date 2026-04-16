@@ -17,7 +17,7 @@ from agent.graph_helpers import (
 )
 from agent.state import AgentState
 from agent.tools.search import search_tavily as search_tool
-from agent.tools.sql_query import execute_sql_query
+from agent.tools.sql_query import execute_sql_query, get_sql_query_sources
 from core.constants import *
 from core.embeddings.context_enrichment import extract_query_entities
 from core.embeddings.retriever import (
@@ -1009,6 +1009,9 @@ async def sql_query_node(state: AgentState) -> AgentState:
     if not query:
         print("[sql_query_node] No SQL query provided")
         state.sql_result = "No SQL query was provided."
+        state.sql_executed_query = None
+        state.sql_source_tables = []
+        state.sql_source_documents = []
         state.sql_last_executed_query = None
         state.messages.append(
             AIMessage(content="SQL query action requested but no query was provided.")
@@ -1016,8 +1019,22 @@ async def sql_query_node(state: AgentState) -> AgentState:
         return state
 
     print(f"[sql_query_node] Executing SQL: {query}")
+    state.sql_executed_query = query
+    state.sql_source_tables = []
+    state.sql_source_documents = []
     state.sql_last_executed_query = None
     state.sql_attempts += 1
+
+    try:
+        source_meta = get_sql_query_sources(
+            user_id=state.user_id,
+            thread_id=state.thread_id,
+            query=query,
+        )
+        state.sql_source_tables = source_meta.get("tables", []) or []
+        state.sql_source_documents = source_meta.get("documents", []) or []
+    except Exception as source_err:
+        print(f"[sql_query_node] Failed to collect SQL source metadata: {source_err}")
 
     try:
         result = await execute_sql_query(

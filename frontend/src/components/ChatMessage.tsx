@@ -11,7 +11,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { FileText, ExternalLink } from 'lucide-react';
+import { FileText, ExternalLink, Database } from 'lucide-react';
 
 
 interface ChatMessageProps {
@@ -30,7 +30,9 @@ export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
   const utteranceRef = React.useRef<SpeechSynthesisUtterance | null>(null);
 
   const chartsUsed = chat.sources?.charts_used ?? [];
+  const sqlUsed = chat.sources?.sql_used ?? [];
   const supportsSpeech = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  const [showSqlDetails, setShowSqlDetails] = React.useState(false);
 
   const speechText = React.useMemo(() => {
     // Convert markdown-heavy content into cleaner plain text for TTS.
@@ -207,7 +209,8 @@ export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
         {!isUser && chat.sources && (
           (chat.sources.documents_used?.length || 0) > 0 ||
           (chat.sources.web_used?.length || 0) > 0 ||
-          (chat.sources.charts_used?.length || 0) > 0
+          (chat.sources.charts_used?.length || 0) > 0 ||
+          (chat.sources.sql_used?.length || 0) > 0
         ) && (
           <div className="mt-3 border-t pt-2">
             <Accordion type="single" collapsible className="w-full">
@@ -215,7 +218,7 @@ export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
                 <AccordionTrigger className="py-1 text-xs text-muted-foreground hover:no-underline hover:text-primary">
                   <span className="flex items-center gap-1">
                     <FileText className="w-3 h-3" />
-                    Sources ({(chat.sources.documents_used?.length || 0) + (chat.sources.web_used?.length || 0) + (chat.sources.charts_used?.length || 0)})
+                    Sources ({(chat.sources.documents_used?.length || 0) + (chat.sources.web_used?.length || 0) + (chat.sources.charts_used?.length || 0) + (chat.sources.sql_used?.length || 0)})
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -241,6 +244,75 @@ export const ChatMessage = ({ chat, onDelete, threadId }: ChatMessageProps) => {
                         <span>{chart.title || 'Generated chart'}</span>
                       </div>
                     ))}
+
+                    {sqlUsed.length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[11px]"
+                          onClick={() => setShowSqlDetails((prev) => !prev)}
+                        >
+                          <Database className="w-3 h-3 mr-1" />
+                          {showSqlDetails ? 'Hide SQL details' : `View SQL details (${sqlUsed.length})`}
+                        </Button>
+
+                        {showSqlDetails && (
+                          <div className="space-y-2">
+                            {sqlUsed.map((entry, idx) => (
+                              <div key={idx} className="rounded-md border border-border/70 bg-background/40 p-2 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-foreground/80">SQL Execution {idx + 1}</span>
+                                  <span
+                                    className={cn(
+                                      'text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded',
+                                      entry.status === 'success'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-red-100 text-red-700'
+                                    )}
+                                  >
+                                    {entry.status}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Query</p>
+                                  <pre className="text-[11px] whitespace-pre-wrap break-words overflow-x-auto rounded bg-muted/50 p-2 text-foreground/90">{entry.query}</pre>
+                                </div>
+
+                                {entry.tables.length > 0 && (
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Tables</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {entry.tables.map((tableName, tableIdx) => (
+                                        <span key={`${tableName}-${tableIdx}`} className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
+                                          {tableName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {entry.documents.length > 0 && (
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Spreadsheet Sources</p>
+                                    <div className="space-y-1">
+                                      {entry.documents.map((doc, docIdx) => (
+                                        <div key={`${doc.doc_id || 'doc'}-${docIdx}`} className="text-[11px] text-foreground/80">
+                                          <span className="font-medium">{doc.title}</span>
+                                          {doc.tables?.length ? ` (${doc.tables.join(', ')})` : ''}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </AccordionContent>
               </AccordionItem>

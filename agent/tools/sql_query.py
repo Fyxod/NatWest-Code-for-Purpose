@@ -4,6 +4,8 @@ Allows the LLM to execute SQL queries against spreadsheet data
 loaded into per-user SQLite databases.
 """
 
+from typing import Any, Dict
+
 from core.services.sqlite_manager import SQLiteManager
 
 
@@ -50,3 +52,8 @@ def get_sql_schema(user_id: str, thread_id: str) -> str:
         or None if no spreadsheet data exists.
     """
     return SQLiteManager.get_schema(user_id, thread_id)
+
+
+def get_sql_query_sources(user_id: str, thread_id: str, query: str) -> Dict[str, Any]:
+    """Return source metadata (tables/documents) for a SQL query."""
+    return SQLiteManager.get_query_source_details(user_id, thread_id, query)

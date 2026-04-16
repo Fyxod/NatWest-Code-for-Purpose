@@ -34,6 +34,9 @@ class AgentState(BaseModel):
     # SQL query fields for spreadsheet analysis
     sql_query: Optional[str] = None
     sql_result: Optional[str] = None
+    sql_executed_query: Optional[str] = None
+    sql_source_tables: List[str] = Field(default_factory=list)
+    sql_source_documents: List[Dict[str, Any]] = Field(default_factory=list)
     sql_last_executed_query: Optional[str] = (
         None  # tracks last executed query for loop detection
     )

@@ -31,6 +31,20 @@ export interface Document {
   file_name: string;
 }
 
+export interface SQLSourceDocument {
+  doc_id: string;
+  title: string;
+  file_name?: string;
+  tables: string[];
+}
+
+export interface SQLExecutionSource {
+  query: string;
+  status: 'success' | 'failed';
+  tables: string[];
+  documents: SQLSourceDocument[];
+}
+
 export interface Chat {
   type: 'user' | 'agent';
   content: string;
@@ -60,6 +74,7 @@ export interface Chat {
       download_json_url?: string;
       download_csv_url?: string;
     }>;
+    sql_used?: SQLExecutionSource[];
   };
 }
 
@@ -150,6 +165,7 @@ export interface QueryResponse {
       download_json_url?: string;
       download_csv_url?: string;
     }>;
+    sql_used?: SQLExecutionSource[];
   };
 }
 
