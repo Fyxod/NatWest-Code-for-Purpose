@@ -2,7 +2,7 @@
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0A0F1E,50:0D3B8C,100:1B8C5E&height=220&section=header&text=AnalytiQ&fontSize=72&fontColor=ffffff&fontAlignY=45&desc=Talk%20to%20Your%20Data.%20Get%20Decisions.&descSize=18&descAlignY=68&descAlign=50&animation=fadeIn" />
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&duration=2500&pause=600&color=38BDF8&center=true&vCenter=true&width=600&lines=Upload+your+data.;Ask+in+plain+English.;Get+answers+instantly.;Export+decision-ready+Excel+reports." />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&duration=2500&pause=600&color=38BDF8&center=true&vCenter=true&width=600&lines=Upload+your+data.;Ask+in+plain+English.;Get+answers+instantly.;Build+charts+visually+or+by+chat.;Export+decision-ready+Excel+reports." />
 
 <br/>
 
@@ -31,12 +31,13 @@ AnalytiQ is an AI-powered data assistant that lets you interact with your data u
 You upload files, ask questions, and get:
 - Clear answers
 - Insights you can trust
+- Interactive charts and visualizations
 - Downloadable Excel reports
 
 No SQL. No formulas. No dashboards.
 
 ```
-Upload → Ask → Understand → Act
+Upload → Ask → Visualize → Understand → Act
 ```
 <br/>
 
@@ -70,7 +71,7 @@ AnalytiQ simplifies the entire process:
 | 1st | **Upload** | Add your Excel, CSV, or image files |
 | 2nd | **Ask** | Type your question in plain English |
 | 3rd | **AI processes** | Understands intent, runs SQL queries |
-| 4th | **Get results** | Answers, insights, or a full Excel report |
+| 4th | **Get results** | Answers, charts, insights, or a full Excel report |
 
 </div>
 <br/>
@@ -107,12 +108,99 @@ The output is explained in simple language.
 
 ---
 
-### 3. Excel Report Generation
+### 3. Chart Builder 
+
+Build rich, interactive visualizations - visually or just by asking in the chat.
+
+**Two ways to create charts:**
+- **Chat:** Simply describe a chart in your message - *"Show me a 3D scatter plot of 10th, 12th grade and CGPA"* - and AnalytiQ generates it inline.
+- **Studio Panel:** Open the Chart Builder from the Studio to configure and generate charts with full control.
+
+**Chart types supported:**
+<div align="center">
+
+| Chart Type | Best For |
+|---|---|
+| **Auto** | Let AnalytiQ pick the best fit |
+| **Bar / Line / Area** | Trends and comparisons |
+| **Pie** | Part-to-whole breakdowns |
+| **Scatter / 3D Scatter** | Correlations and distributions |
+| **Bubble** | Three-variable relationships |
+| **Radar** | Multi-metric comparisons |
+| **Heatmap** | Density and matrix patterns |
+| **Treemap** | Hierarchical data |
+| **Composed** | Multi-layer custom charts |
+
+</div>
+
+**Quick Actions** let you pick a visualization pattern instantly - *Monthly trend, Category compare, Part to whole, Metric dashboard, Heatmap matrix, 3D relationship* - no description needed.
+
+**Chart Gallery:** All generated charts are saved in the Chart Builder panel. You can browse, re-open, download (JSON/CSV), or delete any previously created chart at any time.
+
+**Chart Analysis:** Each chart comes with an AI-written summary below it - explaining the data, key patterns, ranges, and anomalies in plain English.
+
+**Export:** Every chart can be exported as **JSON** or **CSV** for further use.
+
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/aaadc0ba-677a-439a-863f-cf00cbef30a7" width="100%" style="border-radius:12px"/>
+      <br/><sub><b>Chart Builder - create new charts</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/66b4c5e2-d6ba-4484-87bd-33849ea9c548" width="100%" style="border-radius:12px"/>
+      <br/><sub><b>Chart gallery - browse saved charts</b></sub>
+    </td>
+  </tr>
+  <tr><td colspan="2"><br/></td></tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/e09f49de-e6f1-40b6-8f91-10835751c43b" width="100%" style="border-radius:12px"/>
+      <br/><sub><b>Interactive 3D scatter with axis ranges</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/deb8cd7f-cb43-4ef3-b2f0-6358319d6520" width="100%" style="border-radius:12px"/>
+      <br/><sub><b>AI chart analysis below every visualization</b></sub>
+    </td>
+  </tr>
+</table>
+
+</div>
+
+---
+
+### 4. SQL Transparency 
+
+Every answer and chart shows exactly what happened behind the scenes.
+
+Expand **SQL details** on any message or chart to see:
+
+- **Query** - the exact SQL that was executed
+- **Tables used** - which internal tables contributed
+- **Spreadsheet sources** - which uploaded files were involved
+- **Execution status** - `SUCCESS` or error details
+
+```sql
+-- Example: auto-generated query for a correlation chart
+SELECT col_10th_percentage_cgpa, col_12th_percentage_cgpa, current_cgpa
+FROM arista_1_ece_other_branches
+UNION ALL
+SELECT col_10th_percentage_cgpa, col_12th_percentage_cgpa, current_cgpa
+FROM arista_1_cs_branch_students
+```
+
+You always know *what* data was used and *how* the answer was derived - no black boxes.
+
+---
+
+### 5. Excel Report Generation
 
 You can generate full Excel reports by describing what you need.
 
 Example:
-> “Create a report with summary, grouped data, and charts”
+> "Create a report with summary, grouped data, and charts"
 
 The system creates:
 - Multi-sheet workbooks  
@@ -124,7 +212,7 @@ The result is a ready-to-use `.xlsx` file.
 
 ---
 
-### 4. Background Processing
+### 6. Background Processing
 
 Excel generation runs in the background:
 - No waiting screen  
@@ -133,7 +221,35 @@ Excel generation runs in the background:
 
 ---
 
-### 5. Data Handling
+### 7. Thread Instructions 
+
+Customize how AnalytiQ behaves - per thread.
+
+Open **Thread Instructions** from the settings panel to add persistent instructions that are automatically injected alongside the system prompt for every message in that thread.
+
+Examples:
+```
+"Give short answers"
+"Always respond in bullet points"
+"Focus only on revenue metrics"
+"Assume currency is INR"
+```
+
+Instructions can be added, edited, toggled on/off, or deleted at any time. This lets you shape AnalytiQ's behavior for your specific dataset or use case - without repeating yourself every message.
+
+---
+
+### 8. Text-to-Speech 
+
+Every AI response includes a **speaker button** that reads the answer aloud.
+
+- Click the speaker icon next to any agent message to hear it read out
+- Useful for reviewing long reports hands-free or accessibility purposes
+- Works directly in the browser - no setup required
+
+---
+
+### 9. Data Handling
 
 Supported inputs:
 - Excel (`.xls`, `.xlsx`)
@@ -147,7 +263,7 @@ Uploaded data is:
 
 ---
 
-### 6. Spreadsheet Intelligence
+### 10. Spreadsheet Intelligence
 
 - Each sheet becomes a queryable table  
 - Multiple sheets are handled automatically  
@@ -156,18 +272,19 @@ Uploaded data is:
 
 ---
 
-### 7. Trust and Transparency
+### 11. Trust and Transparency
 
 Every answer clearly shows:
-- **Data source**  - which file was used
+- **Data source** - which file was used
 - **Tables used** - which sheets contributed
 - **Columns involved** - what data was analyzed
+- **SQL queries** - exactly how the result was computed
 
-This helps users verify results.
+This helps users verify results end-to-end.
 
 ---
 
-### 8. Flexible Query Modes & Smart Context
+### 12. Flexible Query Modes & Smart Context
 
 Choose how AnalytiQ should answer:
 <div align="center">
@@ -183,7 +300,7 @@ Choose how AnalytiQ should answer:
 
 ---
 
-### 9. Advanced Query Intelligence
+### 13. Advanced Query Intelligence
 
 The system can:
 - Break complex questions into smaller parts  
@@ -194,7 +311,7 @@ If direct answers are not possible, it adapts and still provides useful output.
 
 ---
 
-### 10. Image Understanding (OCR)
+### 14. Image Understanding (OCR)
 
 - Extracts text from images  
 - Works with scanned documents  
@@ -202,7 +319,7 @@ If direct answers are not possible, it adapts and still provides useful output.
 
 ---
 
-### 11. Smart Hybrid Retrieval
+### 15. Smart Hybrid Retrieval
 
 - Combines **keyword search** (BM25) + **semantic search** (vector embeddings)
 - Finds the most relevant data across all your uploads
@@ -210,7 +327,7 @@ If direct answers are not possible, it adapts and still provides useful output.
   
 ---
 
-### 12. Workspace Management
+### 16. Workspace Management
 
 - Work is organized into threads  
 - Each thread has its own data and chat  
@@ -218,7 +335,7 @@ If direct answers are not possible, it adapts and still provides useful output.
 
 ---
 
-### 13. Insights Tools
+### 17. Insights Tools
 
 - **Document Summaries** - instant overview of any uploaded file
 - **Global Summaries** - cross-file insights across your workspace
@@ -226,7 +343,7 @@ If direct answers are not possible, it adapts and still provides useful output.
 
 ---
 
-### 14. Export Options
+### 18. Export Options
 <div align="center">
     
 | Format | Use Case |
@@ -234,12 +351,13 @@ If direct answers are not possible, it adapts and still provides useful output.
 | Markdown | Clean, shareable chat exports |
 | HTML | Web-ready formatted exports |
 | Excel `.xlsx` | Structured, chart-rich reports |
+| JSON / CSV | Raw chart data export |
 
 </div>
 
 ---
 
-### 15. Security
+### 19. Security
 
 - JWT-based user authentication
 - Controlled, isolated data access per user
@@ -247,7 +365,7 @@ If direct answers are not possible, it adapts and still provides useful output.
 
 ---
 
-### 16. Real-Time Experience
+### 20. Real-Time Experience
 
 - Live WebSocket updates via Socket.IO  
 - Fast responses  
@@ -265,11 +383,13 @@ Upload file
     ↓
 Choose mode 
     ↓
-Ask question
+Ask question (or open Chart Builder)
     ↓
-System processes data 
+System processes data & runs SQL
     ↓
-Get answer or Excel report 
+Get answer, chart, or Excel report
+    ↓
+Inspect SQL · Export data · Listen aloud
 ```
 <div align="center">
 
@@ -305,8 +425,9 @@ Get answer or Excel report
       <img src="https://github.com/user-attachments/assets/cc520c1b-420b-4c86-86d8-bff82ca10042" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Auto-generated document summary</b></sub>
     </td>
-      <tr><td colspan="2"><br/></td></tr>
-    <tr>
+  </tr>
+  <tr><td colspan="2"><br/></td></tr>
+  <tr>
     <td align="center">
       <img src="https://github.com/user-attachments/assets/8b5e6eb5-5dc7-40d6-818d-2131c94b6187" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Mind map generating in real-time</b></sub>
@@ -315,8 +436,9 @@ Get answer or Excel report
       <img src="https://github.com/user-attachments/assets/b182b7bc-cdfc-4988-90cf-a26edc1995b1" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Interactive, expandable mind map</b></sub>
     </td>
-      <tr><td colspan="2"><br/></td></tr>
-    <tr>
+  </tr>
+  <tr><td colspan="2"><br/></td></tr>
+  <tr>
     <td align="center">
       <img src="https://github.com/user-attachments/assets/63b0428d-4ff7-4dda-8a8d-7c702f71b288" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Export filtered data as Excel</b></sub>
@@ -325,7 +447,6 @@ Get answer or Excel report
       <img src="https://github.com/user-attachments/assets/a10c7d5c-4271-4f9b-b72b-dc799e1ab226" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Studio panel with advanced settings</b></sub>
     </td>
-      <tr><td colspan="2"><br/></td></tr>
   </tr>
 </table>
 
@@ -357,18 +478,25 @@ flowchart LR
     AGENT --> EXCEL[Excel Skill Pipeline]
     EXCEL --> XLSX[(Generated .xlsx Exports)]
 
+    AGENT --> CHARTS[Chart Builder Engine]
+    CHARTS --> CHARTSTORE[(Chart Artifact Store)]
+
     API --> STUDIO[Summary + Mind Map Services]
     API --> STORAGE[(Thread File Storage)]
+    API --> TTS[Text-to-Speech]
+    API --> INSTRUCT[Thread Instructions]
 ```
 
 ---
 
 ## Example Queries
 
-- “Show revenue breakdown by region”  
-- “Why are sales decreasing?”  
-- “Compare performance across months”  
-- “Create an Excel report with summary and charts”  
+- "Show revenue breakdown by region"  
+- "Why are sales decreasing?"  
+- "Compare performance across months"  
+- "Create an Excel report with summary and charts"
+- "Plot a 3D scatter of 10th, 12th grade and CGPA"
+- "Show student distribution by branch and gender as a treemap"
 
 ---
 
@@ -397,7 +525,7 @@ flowchart LR
       <br/><sub><b>Correlations broken into clear insights</b></sub>
     </td>
   </tr>
-    <tr><td colspan="2"><br/></td></tr>
+  <tr><td colspan="2"><br/></td></tr>
   <tr>
     <td align="center">
       <img src="https://github.com/user-attachments/assets/a7ec506e-3675-4901-a8bb-b689a62e0ded" width="100%" style="border-radius:12px"/>
@@ -429,6 +557,8 @@ flowchart LR
 | **Keyword Search** | BM25 Index |
 | **Database** | MongoDB |
 | **Excel Output** | openpyxl / xlsxwriter |
+| **Charts** | Recharts / Plotly (interactive, exportable) |
+| **Text-to-Speech** | Web Speech API |
 | **Auth** | JWT Middleware |
 
 </div>
@@ -477,7 +607,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> ⚠️ First-time install may take a while — includes heavy packages like `torch`, `sentence-transformers`, and `easyocr`.
+> ⚠️ First-time install may take a while - includes heavy packages like `torch`, `sentence-transformers`, and `easyocr`.
 
 ---
 
@@ -492,20 +622,20 @@ Then edit `.env` and fill in your values:
 | Variable | Description |
 |---|---|
 | `SECRET_KEY` | Any long random string |
-| `GEMINI_API_KEYS` | JSON array of keys — more keys = higher rate limits |
+| `GEMINI_API_KEYS` | JSON array of keys - more keys = higher rate limits |
 | `TAVILY_API_KEY` | Your Tavily search API key |
 | `OPENAI_API_KEY` | Only needed if OpenAI is enabled in `core/constants.py` |
 | `USE_VISION_MODEL` | `True` to enable vision/OCR features, `False` to skip |
 
 > 💡 **LLM Priority Order:** `Local LLM → Gemini → OpenAI`
 > Default config uses **Gemini only**. To switch providers, edit `core/constants.py`.
-> Hit rate limits? Add more keys to `GEMINI_API_KEYS` — they rotate automatically.
+> Hit rate limits? Add more keys to `GEMINI_API_KEYS` - they rotate automatically.
 
 ---
 
 ### 5. Run the Application
 
-Start the **backend** (first run downloads models — may take a few minutes):
+Start the **backend** (first run downloads models - may take a few minutes):
 
 ```bash
 py backend.py
@@ -519,9 +649,8 @@ py frontend.py
 
 > Frontend runs at **`http://localhost:5173`** · Backend API at **`http://localhost:8000`**
 
-</details>
-
 ---
+
 ## Why AnalytiQ?
 
 > Most data tools are built for analysts. AnalytiQ is built for **everyone who needs answers.**
@@ -533,7 +662,10 @@ py frontend.py
 | Hours to build reports | Seconds |
 | Static dashboards | Dynamic, queryable chat |
 | Technical setup | Upload and go |
-| Black-box results | Transparent sources |
+| Black-box results | Full SQL transparency |
+| No chart customization | 10+ chart types, auto or manual |
+| Silent responses | Built-in text-to-speech |
+| Fixed AI behavior | Per-thread custom instructions |
 
 </div>
 <br/>
@@ -547,4 +679,3 @@ py frontend.py
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:1B8C5E,100:0A0F1E&height=100&section=footer" />
 
 </div>
-
