@@ -1,5 +1,3 @@
-<div align="center">
-
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0A0F1E,50:0D3B8C,100:1B8C5E&height=220&section=header&text=AnalytiQ&fontSize=72&fontColor=ffffff&fontAlignY=45&desc=Talk%20to%20Your%20Data.%20Get%20Decisions.&descSize=18&descAlignY=68&descAlign=50&animation=fadeIn" />
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&duration=2500&pause=600&color=38BDF8&center=true&vCenter=true&width=600&lines=Upload+your+data.;Ask+in+plain+English.;Get+answers+instantly.;Build+charts+visually+or+by+chat.;Export+decision-ready+Excel+reports." />
@@ -146,29 +144,28 @@ Build rich, interactive visualizations - visually or just by asking in the chat.
 <table>
   <tr>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/aaadc0ba-677a-439a-863f-cf00cbef30a7" width="100%" style="border-radius:12px"/>
+      <img src="https://github.com/user-attachments/assets/cddf29c5-f94c-4e60-8f16-30600f0f5e99" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Chart Builder - create new charts</b></sub>
     </td>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/66b4c5e2-d6ba-4484-87bd-33849ea9c548" width="100%" style="border-radius:12px"/>
+      <img src="https://github.com/user-attachments/assets/d4b9ce22-ee4a-4b7d-9b6f-6ca7f70cf277" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Chart gallery - browse saved charts</b></sub>
     </td>
   </tr>
   <tr><td colspan="2"><br/></td></tr>
   <tr>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/e09f49de-e6f1-40b6-8f91-10835751c43b" width="100%" style="border-radius:12px"/>
+      <img src="https://github.com/user-attachments/assets/8b0dd2f7-2530-45f4-8204-48605b21cf2e" width="100%" style="border-radius:12px"/>
       <br/><sub><b>Interactive 3D scatter with axis ranges</b></sub>
     </td>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/deb8cd7f-cb43-4ef3-b2f0-6358319d6520" width="100%" style="border-radius:12px"/>
+      <img src="https://github.com/user-attachments/assets/8746ac37-1f49-458c-bd64-269877d57441" width="100%" style="border-radius:12px"/>
       <br/><sub><b>AI chart analysis below every visualization</b></sub>
     </td>
   </tr>
 </table>
 
 </div>
-
 ---
 
 ### 4. SQL Transparency 
