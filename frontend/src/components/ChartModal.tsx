@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, Download } from 'lucide-react';
+import { Loader2, Download, Maximize2, Minimize2 } from 'lucide-react';
 import { api, getAuthToken } from '@/lib/api';
 import { API_URL } from '../../config';
 import ChartRenderer from './ChartRenderer';
@@ -27,6 +27,9 @@ const ChartModal: React.FC<ChartModalProps> = ({
 }) => {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [chartHeight, setChartHeight] = React.useState(430);
+  const chartContainerRef = React.useRef<HTMLDivElement | null>(null);
   const [chart, setChart] = React.useState<{
     title: string;
     description: string;
@@ -55,11 +58,71 @@ const ChartModal: React.FC<ChartModalProps> = ({
     load();
   }, [open, threadId, chartId]);
 
+  React.useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsFullscreen(document.fullscreenElement === chartContainerRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!isFullscreen) {
+      setChartHeight(430);
+      return;
+    }
+
+    const updateHeight = () => {
+      setChartHeight(Math.max(560, window.innerHeight - 180));
+    };
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [isFullscreen]);
+
+  React.useEffect(() => {
+    if (open) {
+      return;
+    }
+
+    if (document.fullscreenElement === chartContainerRef.current) {
+      void document.exitFullscreen().catch(() => {});
+    }
+  }, [open]);
+
   const openDownload = (url?: string | null) => {
     if (!url) return;
     const token = getAuthToken();
     const full = `${API_URL}${url}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
     window.open(full, '_blank');
+  };
+
+  const toggleFullscreen = async () => {
+    const chartContainer = chartContainerRef.current;
+    if (!chartContainer) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement === chartContainer) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+
+      await chartContainer.requestFullscreen();
+    } catch (e) {
+      console.error('Unable to toggle fullscreen for chart.', e);
+    }
   };
 
   const chartDescription = (chart?.description || '').trim();
@@ -84,14 +147,30 @@ const ChartModal: React.FC<ChartModalProps> = ({
           )}
 
           {!loading && !error && chart && (
-            <>
+            <div
+              ref={chartContainerRef}
+              className={isFullscreen ? 'h-full w-full bg-background p-4 overflow-auto' : ''}
+            >
+              <div
+                className={
+                  isFullscreen
+                    ? 'mb-3 flex items-center justify-end sticky top-0 z-10 bg-background/95 backdrop-blur py-1'
+                    : 'mb-3 flex items-center justify-end'
+                }
+              >
+                <Button variant="outline" size="sm" onClick={toggleFullscreen} className="gap-2">
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  {isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
+                </Button>
+              </div>
+
               <ChartRenderer
                 chartType={chart.chart_type}
                 data={chart.data}
                 xKey={chart.x_key}
                 yKeys={chart.y_keys}
                 title={chart.title}
-                height={430}
+                height={chartHeight}
               />
 
               {chartDescription && (
@@ -104,7 +183,7 @@ const ChartModal: React.FC<ChartModalProps> = ({
                   </p>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
