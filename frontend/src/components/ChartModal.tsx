@@ -30,6 +30,11 @@ const ChartModal: React.FC<ChartModalProps> = ({
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [chartHeight, setChartHeight] = React.useState(430);
   const chartContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const syncFullscreenState = React.useCallback(() => {
+    const container = chartContainerRef.current;
+    const fullscreenElement = document.fullscreenElement;
+    setIsFullscreen(Boolean(container && fullscreenElement && fullscreenElement === container));
+  }, []);
   const [chart, setChart] = React.useState<{
     title: string;
     description: string;
@@ -59,15 +64,15 @@ const ChartModal: React.FC<ChartModalProps> = ({
   }, [open, threadId, chartId]);
 
   React.useEffect(() => {
-    const syncFullscreenState = () => {
-      setIsFullscreen(document.fullscreenElement === chartContainerRef.current);
-    };
-
     document.addEventListener('fullscreenchange', syncFullscreenState);
     return () => {
       document.removeEventListener('fullscreenchange', syncFullscreenState);
     };
-  }, []);
+  }, [syncFullscreenState]);
+
+  React.useEffect(() => {
+    syncFullscreenState();
+  }, [open, chart, syncFullscreenState]);
 
   React.useEffect(() => {
     if (!isFullscreen) {
@@ -91,6 +96,8 @@ const ChartModal: React.FC<ChartModalProps> = ({
       return;
     }
 
+    setIsFullscreen(false);
+
     if (document.fullscreenElement === chartContainerRef.current) {
       void document.exitFullscreen().catch(() => {});
     }
@@ -112,6 +119,7 @@ const ChartModal: React.FC<ChartModalProps> = ({
     try {
       if (document.fullscreenElement === chartContainer) {
         await document.exitFullscreen();
+        syncFullscreenState();
         return;
       }
 
@@ -120,8 +128,10 @@ const ChartModal: React.FC<ChartModalProps> = ({
       }
 
       await chartContainer.requestFullscreen();
+      syncFullscreenState();
     } catch (e) {
       console.error('Unable to toggle fullscreen for chart.', e);
+      syncFullscreenState();
     }
   };
 
