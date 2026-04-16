@@ -1,3 +1,5 @@
+<div align="center">
+
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0A0F1E,50:0D3B8C,100:1B8C5E&height=220&section=header&text=AnalytiQ&fontSize=72&fontColor=ffffff&fontAlignY=45&desc=Talk%20to%20Your%20Data.%20Get%20Decisions.&descSize=18&descAlignY=68&descAlign=50&animation=fadeIn" />
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&duration=2500&pause=600&color=38BDF8&center=true&vCenter=true&width=600&lines=Upload+your+data.;Ask+in+plain+English.;Get+answers+instantly.;Build+charts+visually+or+by+chat.;Export+decision-ready+Excel+reports." />
