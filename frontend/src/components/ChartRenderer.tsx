@@ -10,8 +10,6 @@ import {
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   Radar,
   RadarChart,
   ResponsiveContainer,
@@ -41,6 +39,384 @@ interface ChartRendererProps {
 const COLORS = ['#0EA5E9', '#22C55E', '#F97316', '#A855F7', '#E11D48', '#14B8A6'];
 
 const isNumericSeries = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const shiftColorLightness = (color: string, lightnessDelta: number): string => {
+  const parsedColor = new THREE.Color(color);
+  const hsl = { h: 0, s: 0, l: 0 };
+  parsedColor.getHSL(hsl);
+
+  const adjusted = new THREE.Color();
+  adjusted.setHSL(hsl.h, hsl.s, clamp(hsl.l + lightnessDelta, 0, 1));
+  return `#${adjusted.getHexString()}`;
+};
+
+interface Bar3DShapeProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  fill?: string;
+}
+
+const BAR_3D_DEPTH_X = 10;
+const BAR_3D_DEPTH_Y = 7;
+
+const Bar3DShape: React.FC<Bar3DShapeProps> = ({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  fill = COLORS[0],
+}) => {
+  const normalizedY = height >= 0 ? y : y + height;
+  const normalizedHeight = Math.abs(height);
+
+  if (width <= 0 || normalizedHeight <= 0) {
+    return null;
+  }
+
+  const depthX = Math.min(BAR_3D_DEPTH_X, Math.max(4, width * 0.22));
+  const depthY = Math.min(BAR_3D_DEPTH_Y, Math.max(3, width * 0.16));
+  const topFill = shiftColorLightness(fill, 0.12);
+  const sideFill = shiftColorLightness(fill, -0.14);
+  const highlightFill = shiftColorLightness(fill, 0.24);
+
+  const frontLeft = x;
+  const frontTop = normalizedY;
+  const frontRight = x + width;
+  const frontBottom = normalizedY + normalizedHeight;
+
+  const topPoints = [
+    `${frontLeft},${frontTop}`,
+    `${frontLeft + depthX},${frontTop - depthY}`,
+    `${frontRight + depthX},${frontTop - depthY}`,
+    `${frontRight},${frontTop}`,
+  ].join(' ');
+
+  const sidePoints = [
+    `${frontRight},${frontTop}`,
+    `${frontRight + depthX},${frontTop - depthY}`,
+    `${frontRight + depthX},${frontBottom - depthY}`,
+    `${frontRight},${frontBottom}`,
+  ].join(' ');
+
+  return (
+    <g>
+      <polygon points={sidePoints} fill={sideFill} opacity={0.96} />
+      <polygon points={topPoints} fill={topFill} opacity={0.98} />
+      <rect x={frontLeft} y={frontTop} width={width} height={normalizedHeight} fill={fill} />
+      <rect
+        x={frontLeft + 1}
+        y={frontTop + 1}
+        width={Math.max(2, width * 0.34)}
+        height={Math.max(0, normalizedHeight - 2)}
+        fill={highlightFill}
+        opacity={0.23}
+      />
+    </g>
+  );
+};
+
+interface Pie3DSliceDatum {
+  name: string;
+  value: number;
+  fill: string;
+}
+
+interface Pie3DGeometrySlice extends Pie3DSliceDatum {
+  startAngle: number;
+  endAngle: number;
+  topPath: string;
+  sidePaths: string[];
+  sideFill: string;
+  percentage: number;
+}
+
+interface Pie3DRendererProps {
+  data: Pie3DSliceDatum[];
+  height: number;
+}
+
+interface Point2D {
+  x: number;
+  y: number;
+}
+
+const TAU = Math.PI * 2;
+const PIE_3D_TILT = 0.58;
+const PIE_3D_ANGLE_STEP = Math.PI / 64;
+
+const ellipsePoint = (cx: number, cy: number, rx: number, ry: number, angle: number): Point2D => ({
+  x: cx + rx * Math.cos(angle),
+  y: cy + ry * Math.sin(angle),
+});
+
+const buildTopSlicePath = (
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  startAngle: number,
+  endAngle: number,
+): string => {
+  const start = ellipsePoint(cx, cy, rx, ry, startAngle);
+  const end = ellipsePoint(cx, cy, rx, ry, endAngle);
+  const largeArcFlag = Math.abs(endAngle - startAngle) > Math.PI ? 1 : 0;
+
+  return [
+    `M ${cx} ${cy}`,
+    `L ${start.x} ${start.y}`,
+    `A ${rx} ${ry} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`,
+    'Z',
+  ].join(' ');
+};
+
+const splitContiguousIndices = (indices: number[]): number[][] => {
+  if (!indices.length) {
+    return [];
+  }
+
+  const groups: number[][] = [[indices[0]]];
+  for (let idx = 1; idx < indices.length; idx += 1) {
+    const prev = indices[idx - 1];
+    const current = indices[idx];
+
+    if (current === prev + 1) {
+      groups[groups.length - 1].push(current);
+    } else {
+      groups.push([current]);
+    }
+  }
+
+  return groups;
+};
+
+const buildFrontSidePaths = (
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  startAngle: number,
+  endAngle: number,
+  depth: number,
+): string[] => {
+  const delta = endAngle - startAngle;
+  if (delta <= 0) {
+    return [];
+  }
+
+  const sampleCount = Math.max(2, Math.ceil(delta / PIE_3D_ANGLE_STEP));
+  const angles = Array.from({ length: sampleCount + 1 }, (_, idx) => startAngle + (delta * idx) / sampleCount);
+  const points = angles.map((angle) => ellipsePoint(cx, cy, rx, ry, angle));
+
+  const frontIndices = points
+    .map((point, idx) => (point.y > cy ? idx : -1))
+    .filter((idx) => idx >= 0);
+
+  const groups = splitContiguousIndices(frontIndices);
+
+  return groups
+    .map((group) => {
+      const segment = group.map((pointIndex) => points[pointIndex]);
+      if (segment.length < 2) {
+        return null;
+      }
+
+      const topEdge = segment
+        .map((point, idx) => `${idx === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+        .join(' ');
+      const bottomEdge = [...segment]
+        .reverse()
+        .map((point) => `L ${point.x} ${point.y + depth}`)
+        .join(' ');
+
+      return `${topEdge} ${bottomEdge} Z`;
+    })
+    .filter((path): path is string => Boolean(path));
+};
+
+const Pie3DRenderer: React.FC<Pie3DRendererProps> = ({ data, height }) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = React.useState(0);
+  const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
+  const [tooltip, setTooltip] = React.useState<{
+    x: number;
+    y: number;
+    name: string;
+    value: number;
+    percentage: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const updateWidth = () => {
+      setContainerWidth(Math.max(320, node.clientWidth));
+    };
+
+    updateWidth();
+
+    const observer = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const chartHeight = Math.max(240, Math.min(560, Math.round(height * 0.74)));
+  const legendMaxHeight = Math.max(72, Math.round(height * 0.2));
+
+  const geometry = React.useMemo(() => {
+    const width = containerWidth || 640;
+    const svgHeight = chartHeight;
+
+    const radius = Math.min(width * 0.28, svgHeight * 0.38);
+    const rx = radius;
+    const ry = radius * PIE_3D_TILT;
+    const depth = Math.max(20, Math.min(36, radius * 0.24));
+    const cx = width / 2;
+    const cy = clamp(svgHeight * 0.42, ry + 10, svgHeight - (ry + depth + 12));
+
+    const total = data.reduce((sum, datum) => sum + datum.value, 0);
+    if (total <= 0) {
+      return {
+        width,
+        svgHeight,
+        slices: [] as Pie3DGeometrySlice[],
+        sideElements: [] as Array<{ d: string; fill: string; z: number; key: string }>,
+      };
+    }
+
+    let cursor = -Math.PI / 2;
+    const slices: Pie3DGeometrySlice[] = data.map((datum, idx) => {
+      const ratio = datum.value / total;
+      const sweep = ratio * TAU;
+      const startAngle = cursor;
+      const endAngle = cursor + sweep;
+      cursor = endAngle;
+
+      return {
+        ...datum,
+        startAngle,
+        endAngle,
+        topPath: buildTopSlicePath(cx, cy, rx, ry, startAngle, endAngle),
+        sidePaths: buildFrontSidePaths(cx, cy, rx, ry, startAngle, endAngle, depth),
+        sideFill: shiftColorLightness(datum.fill, -0.24),
+        percentage: ratio * 100,
+      };
+    });
+
+    const sideElements = slices
+      .flatMap((slice, sliceIdx) =>
+        slice.sidePaths.map((path, segmentIdx) => ({
+          d: path,
+          fill: slice.sideFill,
+          z: Math.sin((slice.startAngle + slice.endAngle) / 2),
+          key: `side-${sliceIdx}-${segmentIdx}`,
+        }))
+      )
+      .sort((a, b) => a.z - b.z);
+
+    return { width, svgHeight, slices, sideElements };
+  }, [chartHeight, containerWidth, data]);
+
+  const handleSliceHover = (
+    event: React.MouseEvent<SVGPathElement>,
+    slice: Pie3DGeometrySlice,
+    index: number,
+  ) => {
+    setHoveredIndex(index);
+
+    const bounds = containerRef.current?.getBoundingClientRect();
+    if (!bounds) {
+      return;
+    }
+
+    setTooltip({
+      x: event.clientX - bounds.left + 10,
+      y: event.clientY - bounds.top - 12,
+      name: slice.name,
+      value: slice.value,
+      percentage: slice.percentage,
+    });
+  };
+
+  const clearHover = () => {
+    setHoveredIndex(null);
+    setTooltip(null);
+  };
+
+  const currentTooltip = tooltip;
+
+  return (
+    <div className="w-full h-full flex flex-col">
+      <div ref={containerRef} className="relative w-full" style={{ height: chartHeight }}>
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${geometry.width} ${geometry.svgHeight}`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          {geometry.sideElements.map((side) => (
+            <path key={side.key} d={side.d} fill={side.fill} opacity={0.97} />
+          ))}
+
+          {geometry.slices.map((slice, idx) => (
+            <path
+              key={`top-${slice.name}-${idx}`}
+              d={slice.topPath}
+              fill={slice.fill}
+              stroke="rgba(255,255,255,0.88)"
+              strokeWidth={1.2}
+              onMouseEnter={(event) => handleSliceHover(event, slice, idx)}
+              onMouseMove={(event) => handleSliceHover(event, slice, idx)}
+              onMouseLeave={clearHover}
+              style={{
+                cursor: 'pointer',
+                filter: hoveredIndex === idx ? 'brightness(1.1)' : undefined,
+                transform: hoveredIndex === idx ? 'translateY(-1px)' : undefined,
+                transformOrigin: 'center',
+              }}
+            />
+          ))}
+        </svg>
+
+        {currentTooltip && (
+          <div
+            className="pointer-events-none absolute z-10 rounded-md border bg-background/95 px-2.5 py-1.5 text-xs shadow-lg"
+            style={{ left: currentTooltip.x, top: currentTooltip.y }}
+          >
+            <div className="font-semibold text-foreground max-w-64 truncate">{currentTooltip.name}</div>
+            <div className="text-muted-foreground">
+              {currentTooltip.value.toLocaleString()} ({currentTooltip.percentage.toFixed(1)}%)
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div
+        className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 overflow-y-auto pr-1"
+        style={{ maxHeight: legendMaxHeight }}
+      >
+        {data.map((item, idx) => (
+          <div key={`legend-${item.name}-${idx}`} className="flex items-center gap-1.5 text-xs text-foreground/90">
+            <span className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: item.fill }} />
+            <span>{item.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 type ChartCell = string | number | null;
 type ChartRow = Record<string, ChartCell>;
@@ -766,6 +1142,29 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
     }
     return buildTreemapHierarchy(typedData, xKey, primarySeries);
   }, [safeType, typedData, xKey, primarySeries]);
+  const pie3DData = React.useMemo(() => {
+    if (safeType !== 'pie' || !typedData.length || !primarySeries) {
+      return [] as Pie3DSliceDatum[];
+    }
+
+    return typedData
+      .map((row, idx) => {
+        const numericValue = toNumber(row[primarySeries]);
+        if (numericValue === null || numericValue <= 0) {
+          return null;
+        }
+
+        const rawName = row[xKey];
+        const name = String(rawName ?? `Segment ${idx + 1}`).trim() || `Segment ${idx + 1}`;
+
+        return {
+          name,
+          value: numericValue,
+          fill: COLORS[idx % COLORS.length],
+        };
+      })
+      .filter((item): item is Pie3DSliceDatum => item !== null);
+  }, [safeType, typedData, primarySeries, xKey]);
 
   if (!typedData.length) {
     return <div className="text-sm text-muted-foreground">No chart data available.</div>;
@@ -857,6 +1256,19 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
     );
   }
 
+  if (safeType === 'pie') {
+    if (!pie3DData.length) {
+      return <div className="text-sm text-muted-foreground">Pie chart needs positive numeric values.</div>;
+    }
+
+    return (
+      <div className="w-full">
+        {title && <h3 className="text-base font-semibold mb-3">{title}</h3>}
+        <Pie3DRenderer data={pie3DData} height={height} />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
       {title && <h3 className="text-base font-semibold mb-3">{title}</h3>}
@@ -884,16 +1296,6 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
                 <Area key={key} type="monotone" dataKey={key} stroke={COLORS[idx % COLORS.length]} fill={COLORS[idx % COLORS.length]} fillOpacity={0.22} />
               ))}
             </AreaChart>
-          ) : safeType === 'pie' ? (
-            <PieChart>
-              <Tooltip />
-              <Legend />
-              <Pie data={data} dataKey={primarySeries} nameKey={xKey} outerRadius={120}>
-                {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
           ) : safeType === 'scatter' ? (
             <ScatterChart>
               <CartesianGrid strokeDasharray="3 3" />
@@ -953,7 +1355,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
               ))}
             </RadarChart>
           ) : safeType === 'composed' ? (
-            <ComposedChart data={data}>
+            <ComposedChart data={data} margin={{ top: 20, right: 24, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={xKey} />
               <YAxis />
@@ -961,21 +1363,21 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
               <Legend />
               {fallbackSeries.map((key, idx) =>
                 idx % 2 === 0 ? (
-                  <Bar key={key} dataKey={key} fill={COLORS[idx % COLORS.length]} />
+                  <Bar key={key} dataKey={key} fill={COLORS[idx % COLORS.length]} shape={<Bar3DShape />} />
                 ) : (
                   <Line key={key} type="monotone" dataKey={key} stroke={COLORS[idx % COLORS.length]} strokeWidth={2} dot={false} />
                 )
               )}
             </ComposedChart>
           ) : (
-            <BarChart data={data}>
+            <BarChart data={data} margin={{ top: 20, right: 24, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={xKey} />
               <YAxis />
               <Tooltip />
               <Legend />
               {fallbackSeries.map((key, idx) => (
-                <Bar key={key} dataKey={key} fill={COLORS[idx % COLORS.length]} />
+                <Bar key={key} dataKey={key} fill={COLORS[idx % COLORS.length]} shape={<Bar3DShape />} />
               ))}
             </BarChart>
           )}
